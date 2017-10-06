@@ -152,7 +152,7 @@ void getsym(void)
 		}
 		else
 		{
-			sym = SYM_NULL;//illegal?
+			sym = SYM_BAND;//&
 		}
 	}
 	else if (ch == '|')
@@ -165,7 +165,7 @@ void getsym(void)
 		}
 		else
 		{
-			sym = SYM_NULL;//illegal?
+			sym = SYM_BOR;//illegal?
 		}
 	}
 	/*判断字符是否为保存于csym中的无需超前搜索即可判断的运算符*/
@@ -388,6 +388,12 @@ void factor(symset fsys)
 			expression(fsys);
 			gen(OPR, 0, OPR_NEG);
 		}
+		else if (sym == SYM_NEG)//Expr -> '!'Expr
+		{
+			getsym();
+			expression(fsys);
+			gen(OPR, 0, OPR_NEGL);
+		}
 		test(fsys, createset(SYM_LPAREN, SYM_NULL), 23);
 	} // while
 } // factor
@@ -399,9 +405,9 @@ void term(symset fsys)
 	int mulop;
 	symset set;
 
-	set = uniteset(fsys, createset(SYM_TIMES, SYM_SLASH, SYM_NULL));//（'*','/')
+	set = uniteset(fsys, createset(SYM_TIMES, SYM_SLASH, SYM_MOD,SYM_NULL));//（'*','/','%')
 	factor(set);
-	while (sym == SYM_TIMES || sym == SYM_SLASH)
+	while (sym == SYM_TIMES || sym == SYM_SLASH||sym==SYM_MOD)
 	{
 		mulop = sym;
 		getsym();
@@ -410,22 +416,26 @@ void term(symset fsys)
 		{
 			gen(OPR, 0, OPR_MUL);
 		}
-		else
+		else if(mulop==SYM_SLASH)
 		{
 			gen(OPR, 0, OPR_DIV);
+		}
+		else
+		{
+			gen(OPR, 0, OPR_MOD);
 		}
 	} // while
 	destroyset(set);
 } // term
 
   //////////////////////////////////////////////////////////////////////
-//判定表达式
-void expression(symset fsys)
+//判定'+','-'表达式
+void ADD_exp(symset fsys)
 {
 	int addop;
 	symset set;
 
-	set = uniteset(fsys, createset(SYM_PLUS, SYM_MINUS, SYM_NULL));
+	set = uniteset(fsys, createset(SYM_PLUS, SYM_MINUS, SYM_NULL));//'+','-'
 
 	term(set);
 	while (sym == SYM_PLUS || sym == SYM_MINUS)
@@ -444,35 +454,29 @@ void expression(symset fsys)
 	} // while
 
 	destroyset(set);
-} // expression
+} // ADD_exp
 
   //////////////////////////////////////////////////////////////////////
   //判定条件语句项
-void conditionfactor(symset fsys)
+void condition(symset fsys)
 {
 	int relop;
 	symset set;
-
+	set = uniteset(fsys, createset(SYM_EQU, SYM_NEQ, SYM_LES, SYM_GEQ, SYM_GTR, SYM_LEQ));//'=','<>','>','<','<=','>='
 	if (sym == SYM_ODD)
 	{
 		getsym();
-		expression(fsys);
+		ADD_exp(fsys);
 		gen(OPR, 0, OPR_ODD);
 	}
 	else
 	{
-		set = uniteset(relset, fsys);
-		expression(set);
-		destroyset(set);
-		if (!inset(sym, relset))
-		{
-			error(20);
-		}
-		else
+		ADD_exp(set);
+		if (inset(sym, relset))
 		{
 			relop = sym;
 			getsym();
-			expression(fsys);
+			ADD_exp(fsys);
 			switch (relop)
 			{
 			case SYM_EQU:
@@ -494,35 +498,80 @@ void conditionfactor(symset fsys)
 				gen(OPR, 0, OPR_LEQ);
 				break;
 			} // switch
-		} // else
+		} // if
 	} // else
-} // conditionfactor
+} // condition
+
+//判断按位与语句
+void BIT_AND(symset fsys)
+{
+	symset set;
+	set = uniteset(fsys, createset(SYM_BAND, SYM_NULL));
+	condition(set);
+	while (sym == SYM_BAND)
+	{
+		getsym();
+		condition(set);
+		gen(OPR, 0, OPR_BAND);
+	}//while
+	destroyset(set);
+}//BIT_AND
+
+//判断^语句
+void BIT_XOR(symset fsys)
+{
+	symset set;
+	set = uniteset(fsys, createset(SYM_BXOR, SYM_NULL));
+	BIT_AND(set);
+	while (sym == SYM_BXOR)
+	{
+		getsym();
+		BIT_AND(set);
+		gen(OPR, 0, OPR_BXOR);
+	}
+	destroyset(set);
+}
+
+//判断'|'语句
+void BIT_OR(symset fsys)
+{
+	symset set;
+	set = uniteset(fsys, createset(SYM_BOR, SYM_NULL));
+	BIT_XOR(set);
+	while (sym == SYM_BOR)
+	{
+		getsym();
+		BIT_XOR(set);
+		gen(OPR, 0, OPR_OR);
+	}
+	destroyset(set);
+}
 
 //判断条件语句因子&&
-void conditionterm(symset fsys)
+void LOGIC_AND(symset fsys)
 {
 	symset set;
 	set = uniteset(fsys, createset(SYM_AND, SYM_NULL));
-	conditionfactor(set);
+	BIT_OR(set);
 	while (sym==SYM_AND)
 	{
 		getsym();
-		conditionfactor(set);
+		BIT_OR(set);
 		gen(OPR, 0, OPR_AND);
 	}//while
 	destroyset(set);
 }
 
-//判断条件语句因子||
-void condition(symset fsys)
+//判断表达式
+void expression(symset fsys)
 {
 	symset set;
 	set = uniteset(fsys, createset(SYM_OR, SYM_NULL));
-	conditionterm(set);
+	LOGIC_AND(set);
 	while (sym == SYM_OR)
 	{
 		getsym();
-		conditionterm(set);
+		LOGIC_AND(set);
 		gen(OPR, 0, OPR_OR);
 	}//while
 	destroyset(set);
@@ -593,7 +642,7 @@ void statement(symset fsys)
 		getsym();
 		set1 = createset(SYM_THEN, SYM_DO, SYM_NULL);
 		set = uniteset(set1, fsys);
-		condition(set);
+		expression(set);
 		destroyset(set1);
 		destroyset(set);
 		if (sym == SYM_THEN)
@@ -644,7 +693,7 @@ void statement(symset fsys)
 		getsym();
 		set1 = createset(SYM_DO, SYM_NULL);
 		set = uniteset(set1, fsys);
-		condition(set);
+		expression(set);
 		destroyset(set1);
 		destroyset(set);
 		cx2 = cx;
@@ -864,6 +913,16 @@ void interpret()
 				}
 				stack[top] /= stack[top + 1];
 				break;
+			case OPR_MOD:
+				top--;
+				if (stack[top + 1] == 0)
+				{
+					fprintf(stderr, "Runtime Error: Divided by zero.\n");
+					fprintf(stderr, "Program terminated.\n");
+					continue;
+				}
+				stack[top] %= stack[top + 1];
+				break;
 			case OPR_ODD:
 				stack[top] %= 2;
 				break;
@@ -899,6 +958,18 @@ void interpret()
 				break;
 			case OPR_NEGL:
 				stack[top] = !stack[top];
+				break;
+			case OPR_BAND:
+				top--;
+				stack[top] &= stack[top + 1];
+				break;
+			case OPR_BOR:
+				top--;
+				stack[top] |= stack[top + 1];
+				break;
+			case OPR_BXOR:
+				top--;
+				stack[top] ^= stack[top + 1];
 				break;
 			} // switch
 			break;
@@ -952,12 +1023,12 @@ void main()
 	}
 
 	phi = createset(SYM_NULL);
-	relset = createset(SYM_EQU, SYM_NEQ, SYM_LES, SYM_LEQ, SYM_GTR, SYM_GEQ,SYM_AND,SYM_OR, SYM_NULL);
+	relset = createset(SYM_EQU, SYM_NEQ, SYM_LES, SYM_LEQ, SYM_GTR, SYM_GEQ, SYM_NULL);
 
 	// create begin symbol sets
 	declbegsys = createset(SYM_CONST, SYM_VAR, SYM_PROCEDURE, SYM_NULL);
 	statbegsys = createset(SYM_BEGIN, SYM_CALL, SYM_IF, SYM_WHILE, SYM_NULL);
-	facbegsys = createset(SYM_IDENTIFIER, SYM_NUMBER, SYM_LPAREN, SYM_MINUS, SYM_NULL);
+	facbegsys = createset(SYM_IDENTIFIER, SYM_NUMBER, SYM_LPAREN, SYM_MINUS, SYM_NEG,SYM_NULL);
 
 	err = cc = cx = ll = 0; // initialize global variables
 	ch = ' ';
