@@ -4,7 +4,7 @@
 #define NRW        16     // number of reserved words
 #define TXMAX      500    // length of identifier table
 #define MAXNUMLEN  14     // maximum number of digits in numbers
-#define NSYM       13     // maximum number of symbols in array ssym and csym
+#define NSYM       15     // maximum number of symbols in array ssym and csym
 #define MAXIDLEN   10     // length of identifiers
 
 #define MAXADDRESS 32767  // maximum address
@@ -57,7 +57,11 @@ enum symtype
 	SYM_FOR,
 	SYM_LSQUARE, 
 	SYM_RSQUARE,
-	SYM_NEG
+	SYM_NEG,
+	SYM_MOD,
+	SYM_BAND,
+	SYM_BOR,
+	SYM_BXOR
 };
 
 enum idtype
@@ -77,7 +81,8 @@ enum oprcode
 	OPR_RET, OPR_NEG, OPR_ADD, OPR_MIN,
 	OPR_MUL, OPR_DIV, OPR_ODD, OPR_EQU,
 	OPR_NEQ, OPR_LES, OPR_LEQ, OPR_GTR,
-	OPR_GEQ, OPR_AND,OPR_OR,OPR_NEGL
+	OPR_GEQ, OPR_AND, OPR_OR,  OPR_NEGL,
+	OPR_MOD, OPR_BAND,OPR_BOR, OPR_BXOR
 };
 
 
@@ -164,13 +169,13 @@ int wsym[NRW + 1] =
 int ssym[NSYM + 1] =
 {
 	SYM_NULL, SYM_PLUS, SYM_MINUS, SYM_TIMES, SYM_SLASH,
-	SYM_LPAREN, SYM_RPAREN,SYM_LSQUARE,SYM_RSQUARE, SYM_EQU, SYM_COMMA, SYM_PERIOD, SYM_SEMICOLON,SYM_NEG
+	SYM_LPAREN, SYM_RPAREN,SYM_LSQUARE,SYM_RSQUARE, SYM_EQU, SYM_COMMA, SYM_PERIOD, SYM_SEMICOLON,SYM_NEG,SYM_MOD,SYM_BXOR
 };
 
 //ÔËËã·û±í
 char csym[NSYM + 1] =
 {
-	' ', '+', '-', '*', '/', '(', ')','[',']', '=', ',', '.', ';','!'
+	' ', '+', '-', '*', '/', '(', ')','[',']', '=', ',', '.', ';','!','%','^'
 };
 
 #define MAXINS   8
