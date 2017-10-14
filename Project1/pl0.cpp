@@ -165,7 +165,7 @@ void getsym(void)
 		}
 		else
 		{
-			sym = SYM_BOR;//illegal?
+			sym = SYM_BOR;//|
 		}
 	}
 	/*判断字符是否为保存于csym中的无需超前搜索即可判断的运算符*/
@@ -240,7 +240,7 @@ void enter(int kind)
 		break;
 	case ID_VARIABLE://变量
 		mk = (mask*)&table[tx];
-		mk->level = level;
+		mk->level = level;//变量所在的层次
 		mk->address = dx++;
 		break;
 	case ID_PROCEDURE://过程
@@ -562,19 +562,63 @@ void LOGIC_AND(symset fsys)
 	destroyset(set);
 }
 
-//判断表达式
-void expression(symset fsys)
+//判断表达式||
+void LOGIC_OR(symset fsys)
 {
 	symset set;
 	set = uniteset(fsys, createset(SYM_OR, SYM_NULL));
 	LOGIC_AND(set);
-	while (sym == SYM_OR)
+	while (sym == SYM_OR)//||
 	{
 		getsym();
 		LOGIC_AND(set);
 		gen(OPR, 0, OPR_OR);
 	}//while
 	destroyset(set);
+}
+
+//判断表达式
+void expression(symset fsys)
+{
+	int i,sy,poi;
+	char idn[MAXIDLEN+1];
+	symset set;
+	mask* mk;
+	set = uniteset(fsys, createset(SYM_BECOMES, SYM_NULL));
+	i = cx;
+	sy = sym;
+	strcpy_s(idn, strlen(id) + 1, id);
+	LOGIC_OR(set);
+	if (sy == SYM_IDENTIFIER&&sym==SYM_BECOMES)//:=
+	{
+		if ((cx - i) == 1)//':='前仅为一个变量,判断为赋值表达式
+		{
+			cx--;//将LOD指令删除
+			getsym();
+			expression(fsys);//id=expression
+			gen(OPR, 0, OPR_BECOMES);
+			if (!(poi = position(idn)))
+			{
+				error(11);//Undeclared identifier.
+			}
+			else if (table[poi].kind!=ID_VARIABLE)
+			{
+				error(12);//Illegal assignment.
+				poi = 0;
+			}
+			mk = (mask*)&table[poi];
+			if (poi)
+			{
+				gen(STO, level-mk->level, mk->address);
+			}
+
+		}
+		else
+		{
+			error(12);//Illegal assignment.
+		}
+	}
+	
 }
 
   //////////////////////////////////////////////////////////////////////
@@ -585,7 +629,8 @@ void statement(symset fsys)
 
 	if (sym == SYM_IDENTIFIER)
 	{ // variable assignment
-		mask* mk;
+		expression(fsys);
+		/*mask* mk;
 		if (!(i = position(id)))
 		{
 			error(11); // Undeclared identifier.
@@ -609,7 +654,7 @@ void statement(symset fsys)
 		if (i)
 		{
 			gen(STO, level - mk->level, mk->address);
-		}
+		}*/
 	}
 	else if (sym == SYM_CALL)
 	{ // procedure call
@@ -970,6 +1015,10 @@ void interpret()
 			case OPR_BXOR:
 				top--;
 				stack[top] ^= stack[top + 1];
+				break;
+			case OPR_BECOMES:
+				top++;
+				stack[top] = stack[top - 1];
 				break;
 			} // switch
 			break;
