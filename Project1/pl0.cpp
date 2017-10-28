@@ -98,17 +98,17 @@ void getsym(void)
 			error(25);     // The number is too great.
 	}
 	/*下面一系列流程均为判断字符是否为运算符，并且按照是否需要超前搜索分为两类*/
-	else if (ch == ':')
+	else if (ch == '=')
 	{
 		getch();
 		if (ch == '=')
 		{
-			sym = SYM_BECOMES; // :=
+			sym = SYM_EQU; // ==
 			getch();
 		}
 		else
 		{
-			sym = SYM_NULL;       // illegal?
+			sym = SYM_BECOMES;       // =
 		}
 	}
 	else if (ch == '>')
@@ -219,6 +219,7 @@ void test(symset s1, symset s2, int n)
 
   //////////////////////////////////////////////////////////////////////
 int dx;  // data allocation index
+int formal=0;//the number of formal parameter
 
  // enter object(constant, variable or procedre) into table.
 void enter(int kind)
@@ -262,15 +263,15 @@ int position(char* id)
 } // position
 
   //////////////////////////////////////////////////////////////////////
-void constdeclaration()//constant赋值语句
+void constdeclaration()//const赋值语句
 {
 	if (sym == SYM_IDENTIFIER)
 	{
 		getsym();
-		if (sym == SYM_EQU || sym == SYM_BECOMES)//=||：=
+		if (sym == SYM_EQU || sym == SYM_BECOMES)//=||==
 		{
-			if (sym == SYM_BECOMES)
-				error(1); // Found ':=' when expecting '='.
+			if (sym == SYM_EQU)
+				error(1); // Found '==' when expecting '='.
 			getsym();
 			if (sym == SYM_NUMBER)
 			{
@@ -324,12 +325,13 @@ void listcode(int from, int to)
 void factor(symset fsys)
 {
 	void expression(symset fsys);
-	int i;
+	int i,j;
+	int parameter = 0;
 	symset set;
 
 	test(facbegsys, fsys, 24); // The symbol can not be as the beginning of an expression.
 
-	while (inset(sym, facbegsys))
+	if (inset(sym, facbegsys))
 	{
 		if (sym == SYM_IDENTIFIER)
 		{
@@ -351,7 +353,65 @@ void factor(symset fsys)
 					gen(LOD, level - mk->level, mk->address);
 					break;
 				case ID_PROCEDURE:
-					error(21); // Procedure identifier can not be in an expression.
+					mk = (mask*)&table[i];
+					getsym();
+					if(sym==SYM_LPAREN)
+					{
+						getsym();
+						while (sym == SYM_IDENTIFIER||sym == SYM_NUMBER)
+						{
+							if (sym == SYM_IDENTIFIER)
+							{
+								if ((j = position(id)) == 0)
+								{
+									error(11);//Undeclared identifier
+								}
+								else
+								{
+									switch (table[j].kind)
+									{
+									case ID_CONSTANT:
+										gen(LIT, 0, table[j].value);
+										break;
+									case ID_VARIABLE:
+										mk = (mask*)&table[j];
+										gen(LOD, level - mk->level, mk->address);
+										break;
+									case ID_PROCEDURE:
+										error(13);
+										break;
+									}
+								}
+							}
+							else
+							{//sym==SYM_NUMBER
+								gen(LIT, 0, num);
+							}
+							parameter++;
+							getsym();
+							if (sym == SYM_COMMA)//','
+							{
+								getsym();
+							}
+						}
+						if (sym == SYM_RPAREN)//')'
+						{
+							mk = (mask*)&table[i];
+							gen(CAL, level - mk->level, mk->address);
+						}
+						else
+						{
+							error(22);//Missing ')'.
+						}
+						if (parameter != mk->config[0])
+						{
+							error(27);
+						}
+					}
+					else
+					{
+						error(21);//"Procedure identifier can not be in an expression without bracket pair."
+					}
 					break;
 				} // switch
 			}
@@ -589,7 +649,7 @@ void expression(symset fsys)
 	sy = sym;
 	strcpy_s(idn, strlen(id) + 1, id);
 	LOGIC_OR(set);
-	if (sy == SYM_IDENTIFIER&&sym==SYM_BECOMES)//:=
+	if (sy == SYM_IDENTIFIER&&sym==SYM_BECOMES)//=
 	{
 		if ((cx - i) == 1)//':='前仅为一个变量,判断为赋值表达式
 		{
@@ -609,6 +669,7 @@ void expression(symset fsys)
 			mk = (mask*)&table[poi];
 			if (poi)
 			{
+				printf("position:%d\n", poi);
 				gen(STO, level-mk->level, mk->address);
 			}
 
@@ -656,7 +717,7 @@ void statement(symset fsys)
 			gen(STO, level - mk->level, mk->address);
 		}*/
 	}
-	else if (sym == SYM_CALL)
+	/*else if (sym == SYM_CALL)
 	{ // procedure call
 		getsym();
 		if (sym != SYM_IDENTIFIER)
@@ -681,22 +742,30 @@ void statement(symset fsys)
 			}
 			getsym();
 		}
-	}
+	}*/
 	else if (sym == SYM_IF)
 	{ // if statement
 		getsym();
-		set1 = createset(SYM_THEN, SYM_DO, SYM_NULL);
-		set = uniteset(set1, fsys);
-		expression(set);
-		destroyset(set1);
-		destroyset(set);
-		if (sym == SYM_THEN)
+		if (sym == SYM_LPAREN)//'('
 		{
 			getsym();
 		}
 		else
 		{
-			error(16); // 'then' expected.
+			error(22);
+		}
+		set1 = createset(SYM_RPAREN,SYM_NULL);
+		set = uniteset(set1, fsys);
+		expression(set);
+		destroyset(set1);
+		destroyset(set);
+		if (sym == SYM_RPAREN)
+		{
+			getsym();
+		}
+		else
+		{
+			error(22); // ')' expected.
 		}
 		cx1 = cx;
 		gen(JPC, 0, 0);
@@ -755,6 +824,36 @@ void statement(symset fsys)
 		gen(JMP, 0, cx1);
 		code[cx2].a = cx;
 	}
+	else if (sym == SYM_RETURN)
+	{//return statement
+		mask* mk;
+		int i;
+		getsym();
+		set1 = createset(SYM_SEMICOLON, SYM_NULL);
+		set = uniteset(set1, fsys);
+		expression(set);
+		gen(STO, 0, -1);
+		gen(OPR, formal_para, OPR_RET);
+		/*if (sym == SYM_IDENTIFIER)
+		{
+			if ((i = position(id)) == 0)
+			{
+				error(11);//Undeclared Identifier
+			}
+			else
+			{
+				mk = (mask*)&table[i];
+				gen(LOD, level - mk->level, mk->address);
+				gen(STO, 0, -1);//store the returned value
+			}
+		}
+		else if (sym == SYM_NUMBER)
+		{
+			gen(LIT, 0, num);
+			gen(STO, 0, -1);//store the returned value
+		}
+		getsym();*/
+	}
 	test(fsys, phi, 19);
 } // statement
 
@@ -762,14 +861,18 @@ void statement(symset fsys)
 void block(symset fsys)
 {
 	int cx0; // initial code index
-	mask* mk;
+	mask* mk, *mk2;
 	int block_dx;
 	int savedTx;
+	int savedformal;
 	symset set1, set;
 
-	dx = 3;
+	dx = 4;
 	block_dx = dx;
-	mk = (mask*)&table[tx];
+	mk = (mask*)&table[tx - formal];
+	savedformal = formal;
+	formal = 0;
+	printf("tx: %d\n", tx);
 	mk->address = cx;
 	gen(JMP, 0, 0);
 	if (level > MAXLEVEL)
@@ -825,10 +928,12 @@ void block(symset fsys)
 		while (sym == SYM_PROCEDURE)
 		{ // procedure declarations
 			getsym();
+			int savetx;
 			if (sym == SYM_IDENTIFIER)
 			{
 				enter(ID_PROCEDURE);
 				getsym();
+				savetx = tx;//save the position of the procedure in the table
 			}
 			else
 			{
@@ -836,38 +941,66 @@ void block(symset fsys)
 			}
 
 
-			if (sym == SYM_SEMICOLON)
+			/*if (sym == SYM_SEMICOLON)
 			{
 				getsym();
 			}
 			else
 			{
 				error(5); // Missing ',' or ';'.
-			}
-
+			}*/
 			level++;
 			savedTx = tx;
-			set1 = createset(SYM_SEMICOLON, SYM_NULL);
+			if (sym == SYM_LPAREN)
+			{
+				int i,j;
+				int savedtx = tx;
+				getsym();
+				while (sym == SYM_IDENTIFIER)
+				{
+					formal++;
+					tx++;
+					strcpy(table[tx].name, id);
+					mk2 = (mask*)&table[tx];
+					mk2->level = level;
+					mk2->kind = ID_VARIABLE;
+					getsym();
+					if (sym == SYM_COMMA)//','
+					{
+						getsym();
+					}
+				}
+				if (sym == SYM_RPAREN)//')'
+				{
+					getsym();
+				}
+				else
+				{
+					error(26);//"Illegal procedure declarations"
+				}
+				mk2 = (mask*)&table[savetx];
+				mk2->config[0] = formal;
+				j = formal+1;
+				printf("formal:%d,savedtx:%d,tx:%d\n", formal, savedtx,tx);
+				for (i = savedtx + 1; i <= tx; i++)
+				{
+					mk2 = (mask*)&table[i];
+					mk2->address = -j;
+					j--;
+				}
+			}
+			set1 = createset(SYM_END, SYM_NULL);
 			set = uniteset(set1, fsys);
-			block(set);
+			block(set);//difine procedure operation
 			destroyset(set1);
 			destroyset(set);
 			tx = savedTx;
 			level--;
-
-			if (sym == SYM_SEMICOLON)
-			{
-				getsym();
-				set1 = createset(SYM_IDENTIFIER, SYM_PROCEDURE, SYM_NULL);
-				set = uniteset(statbegsys, set1);
-				test(set, fsys, 6);
-				destroyset(set1);
-				destroyset(set);
-			}
-			else
-			{
-				error(5); // Missing ',' or ';'.
-			}
+			/*set1 = createset(SYM_IDENTIFIER, SYM_PROCEDURE, SYM_NULL);
+			set = uniteset(statbegsys, set1);
+			test(set, fsys, 6);
+			destroyset(set1);
+			destroyset(set);*/
 		} // while
 		dx = block_dx; //restore dx after handling procedure call!
 		set1 = createset(SYM_IDENTIFIER, SYM_NULL);
@@ -878,9 +1011,10 @@ void block(symset fsys)
 	} while (inset(sym, declbegsys));
 
 	code[mk->address].a = cx;
-	mk->address = cx;
+	mk->address = cx;//procedure begin
 	cx0 = cx;
 	gen(INT, 0, block_dx);
+	formal_para = savedformal;
 	set1 = createset(SYM_SEMICOLON, SYM_END, SYM_NULL);
 	set = uniteset(set1, fsys);
 	statement(set);
@@ -929,9 +1063,10 @@ void interpret()
 			switch (i.a) // operator
 			{
 			case OPR_RET:
-				top = b - 1;
-				pc = stack[top + 3];
-				b = stack[top + 2];
+				top = b - 1-i.l;
+				pc = stack[top + 3+i.l];
+				b = stack[top + 2+i.l];
+				stack[top] = stack[top + i.l];
 				break;
 			case OPR_NEG:
 				stack[top] = -stack[top];
@@ -1031,11 +1166,11 @@ void interpret()
 			top--;
 			break;
 		case CAL:
-			stack[top + 1] = base(stack, b, i.l);
+			stack[top + 2] = base(stack, b, i.l);
 			// generate new block mark
-			stack[top + 2] = b;
-			stack[top + 3] = pc;
-			b = top + 1;
+			stack[top + 3] = b;
+			stack[top + 4] = pc;
+			b = top + 2;
 			pc = i.a;
 			break;
 		case INT:

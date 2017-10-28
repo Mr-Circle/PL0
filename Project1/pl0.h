@@ -98,7 +98,7 @@ typedef struct
 char* err_msg[] =
 {
 	/*  0 */    "",
-	/*  1 */    "Found ':=' when expecting '='.",
+	/*  1 */    "Found '==' when expecting '='.",
 	/*  2 */    "There must be a number to follow '='.",
 	/*  3 */    "There must be an '=' to follow the identifier.",
 	/*  4 */    "There must be an identifier to follow 'const', 'var', or 'procedure'.",
@@ -110,7 +110,7 @@ char* err_msg[] =
 	/* 10 */    "';' expected.",
 	/* 11 */    "Undeclared identifier.",
 	/* 12 */    "Illegal assignment.",
-	/* 13 */    "':=' expected.",
+	/* 13 */    "procedure can't be a formal parameter.",
 	/* 14 */    "There must be an identifier to follow the 'call'.",
 	/* 15 */    "A constant or variable can not be called.",
 	/* 16 */    "'then' expected.",
@@ -118,13 +118,13 @@ char* err_msg[] =
 	/* 18 */    "'do' expected.",
 	/* 19 */    "Incorrect symbol.",
 	/* 20 */    "Relative operators expected.",
-	/* 21 */    "Procedure identifier can not be in an expression.",
-	/* 22 */    "Missing ')'.",
+	/* 21 */    "Procedure identifier can not be in an expression without bracket pair.",
+	/* 22 */    "Missing ')'or '('.",
 	/* 23 */    "The symbol can not be followed by a factor.",
 	/* 24 */    "The symbol can not be as the beginning of an expression.",
 	/* 25 */    "The number is too great.",
-	/* 26 */    "",
-	/* 27 */    "",
+	/* 26 */    "Illegal procedure declarations",
+	/* 27 */    "The number of the parameter of the procedure is wrong.",
 	/* 28 */    "",
 	/* 29 */    "",
 	/* 30 */    "",
@@ -144,6 +144,7 @@ int  err;
 int  cx;         // index of current instruction to be generated.
 int  level = 0;
 int  tx = 0;//符号表中的条目数
+int  formal_para=0;//当前过程形参数目
 
 char line[80];//存储从文件中取出的一整行字符
 
@@ -170,13 +171,13 @@ int wsym[NRW + 1] =
 int ssym[NSYM + 1] =
 {
 	SYM_NULL, SYM_PLUS, SYM_MINUS, SYM_TIMES, SYM_SLASH,
-	SYM_LPAREN, SYM_RPAREN,SYM_LSQUARE,SYM_RSQUARE, SYM_EQU, SYM_COMMA, SYM_PERIOD, SYM_SEMICOLON,SYM_NEG,SYM_MOD,SYM_BXOR
+	SYM_LPAREN, SYM_RPAREN,SYM_LSQUARE,SYM_RSQUARE, SYM_COMMA, SYM_PERIOD, SYM_SEMICOLON,SYM_NEG,SYM_MOD,SYM_BXOR
 };
 
 //运算符表
 char csym[NSYM + 1] =
 {
-	' ', '+', '-', '*', '/', '(', ')','[',']', '=', ',', '.', ';','!','%','^'
+	' ', '+', '-', '*', '/', '(', ')','[',']', ',', '.', ';','!','%','^'
 };
 
 #define MAXINS   8
@@ -191,6 +192,7 @@ typedef struct
 	char name[MAXIDLEN + 1];
 	int  kind;
 	int  value;
+	int  config[10];
 } comtab;
 
 comtab table[TXMAX];//定义了符号表
@@ -201,6 +203,7 @@ typedef struct
 	int   kind;
 	short level;
 	short address;
+	int   config[10];
 } mask;
 
 FILE* infile;
