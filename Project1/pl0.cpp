@@ -325,7 +325,7 @@ void listcode(int from, int to)
 void factor(symset fsys)
 {
 	void expression(symset fsys);
-	int i,j;
+	int i;
 	int parameter = 0;
 	symset set;
 
@@ -360,7 +360,7 @@ void factor(symset fsys)
 						getsym();
 						while (sym == SYM_IDENTIFIER||sym == SYM_NUMBER)
 						{
-							if (sym == SYM_IDENTIFIER)
+							/*if (sym == SYM_IDENTIFIER)
 							{
 								if ((j = position(id)) == 0)
 								{
@@ -386,9 +386,10 @@ void factor(symset fsys)
 							else
 							{//sym==SYM_NUMBER
 								gen(LIT, 0, num);
-							}
+							}*/
+							set = createset(SYM_COMMA, SYM_RPAREN, SYM_NULL);
+							expression(set);
 							parameter++;
-							getsym();
 							if (sym == SYM_COMMA)//','
 							{
 								getsym();
@@ -669,7 +670,6 @@ void expression(symset fsys)
 			mk = (mask*)&table[poi];
 			if (poi)
 			{
-				printf("position:%d\n", poi);
 				gen(STO, level-mk->level, mk->address);
 			}
 
@@ -685,64 +685,25 @@ void expression(symset fsys)
   //////////////////////////////////////////////////////////////////////
 void statement(symset fsys)
 {
-	int i, cx1, cx2;
+	int  cx1, cx2;
 	symset set1, set;
 
 	if (sym == SYM_IDENTIFIER)
 	{ // variable assignment
-		expression(fsys);
-		/*mask* mk;
-		if (!(i = position(id)))
-		{
-			error(11); // Undeclared identifier.
-		}
-		else if (table[i].kind != ID_VARIABLE)
-		{
-			error(12); // Illegal assignment.
-			i = 0;
-		}
-		getsym();
-		if (sym == SYM_BECOMES)
+		set1 = createset(SYM_SEMICOLON, SYM_NULL);
+		set = uniteset(fsys, set1);
+		expression(set);
+		destroyset(set1);
+		destroyset(set);
+		if (sym == SYM_SEMICOLON)
 		{
 			getsym();
 		}
 		else
 		{
-			error(13); // ':=' expected.
+			error(10);//";" is expected
 		}
-		expression(fsys);
-		mk = (mask*)&table[i];
-		if (i)
-		{
-			gen(STO, level - mk->level, mk->address);
-		}*/
 	}
-	/*else if (sym == SYM_CALL)
-	{ // procedure call
-		getsym();
-		if (sym != SYM_IDENTIFIER)
-		{
-			error(14); // There must be an identifier to follow the 'call'.
-		}
-		else
-		{
-			if (!(i = position(id)))
-			{
-				error(11); // Undeclared identifier.
-			}
-			else if (table[i].kind == ID_PROCEDURE)
-			{
-				mask* mk;
-				mk = (mask*)&table[i];
-				gen(CAL, level - mk->level, mk->address);
-			}
-			else
-			{
-				error(15); // A constant or variable can not be called. 
-			}
-			getsym();
-		}
-	}*/
 	else if (sym == SYM_IF)
 	{ // if statement
 		getsym();
@@ -752,7 +713,7 @@ void statement(symset fsys)
 		}
 		else
 		{
-			error(22);
+			error(22);//"Missing ')'or '('."
 		}
 		set1 = createset(SYM_RPAREN,SYM_NULL);
 		set = uniteset(set1, fsys);
@@ -769,29 +730,30 @@ void statement(symset fsys)
 		}
 		cx1 = cx;
 		gen(JPC, 0, 0);
-		statement(fsys);
+		set1 = createset(SYM_ELSE, SYM_NULL);
+		set = uniteset(set1, fsys);
+		statement(set);
+		code[cx1].a = cx+1;
+		cx1 = cx;//save the position of JMP in the instrutions
+		gen(JMP, 0, 0);
+		if (sym == SYM_ELSE)
+		{//else statement
+			getsym();
+			statement(fsys);
+		}
 		code[cx1].a = cx;
 	}
 	else if (sym == SYM_BEGIN)
 	{ // block
 		getsym();
-		set1 = createset(SYM_SEMICOLON, SYM_END, SYM_NULL);
-		set = uniteset(set1, fsys);
-		statement(set);
-		while (sym == SYM_SEMICOLON || inset(sym, statbegsys))
+		set1 = createset(SYM_END, SYM_NULL);
+		set = uniteset(set1, statbegsys);
+		while (inset(sym, statbegsys))
 		{
-			if (sym == SYM_SEMICOLON)
-			{
-				getsym();
-			}
-			else
-			{
-				error(10);
-			}
 			statement(set);
 		} // while
-		destroyset(set1);
 		destroyset(set);
+		destroyset(set1);
 		if (sym == SYM_END)
 		{
 			getsym();
@@ -805,7 +767,15 @@ void statement(symset fsys)
 	{ // while statement
 		cx1 = cx;
 		getsym();
-		set1 = createset(SYM_DO, SYM_NULL);
+		if (sym == SYM_LPAREN)//'('
+		{
+			getsym();
+		}
+		else
+		{
+			error(22);//"Missing ')'or '('."
+		}
+		set1 = createset(SYM_RPAREN, SYM_NULL);
 		set = uniteset(set1, fsys);
 		expression(set);
 		destroyset(set1);
@@ -826,33 +796,22 @@ void statement(symset fsys)
 	}
 	else if (sym == SYM_RETURN)
 	{//return statement
-		mask* mk;
-		int i;
 		getsym();
 		set1 = createset(SYM_SEMICOLON, SYM_NULL);
 		set = uniteset(set1, fsys);
 		expression(set);
+		destroyset(set1);
+		destroyset(set);
 		gen(STO, 0, -1);
 		gen(OPR, formal_para, OPR_RET);
-		/*if (sym == SYM_IDENTIFIER)
+		if (sym == SYM_SEMICOLON)
 		{
-			if ((i = position(id)) == 0)
-			{
-				error(11);//Undeclared Identifier
-			}
-			else
-			{
-				mk = (mask*)&table[i];
-				gen(LOD, level - mk->level, mk->address);
-				gen(STO, 0, -1);//store the returned value
-			}
+			getsym();
 		}
-		else if (sym == SYM_NUMBER)
+		else
 		{
-			gen(LIT, 0, num);
-			gen(STO, 0, -1);//store the returned value
+			error(10);//";" is excepted
 		}
-		getsym();*/
 	}
 	test(fsys, phi, 19);
 } // statement
@@ -872,7 +831,6 @@ void block(symset fsys)
 	mk = (mask*)&table[tx - formal];
 	savedformal = formal;
 	formal = 0;
-	printf("tx: %d\n", tx);
 	mk->address = cx;
 	gen(JMP, 0, 0);
 	if (level > MAXLEVEL)
@@ -939,16 +897,6 @@ void block(symset fsys)
 			{
 				error(4); // There must be an identifier to follow 'const', 'var', or 'procedure'.
 			}
-
-
-			/*if (sym == SYM_SEMICOLON)
-			{
-				getsym();
-			}
-			else
-			{
-				error(5); // Missing ',' or ';'.
-			}*/
 			level++;
 			savedTx = tx;
 			if (sym == SYM_LPAREN)
@@ -981,7 +929,6 @@ void block(symset fsys)
 				mk2 = (mask*)&table[savetx];
 				mk2->config[0] = formal;
 				j = formal+1;
-				printf("formal:%d,savedtx:%d,tx:%d\n", formal, savedtx,tx);
 				for (i = savedtx + 1; i <= tx; i++)
 				{
 					mk2 = (mask*)&table[i];
@@ -1211,7 +1158,7 @@ void main()
 
 	// create begin symbol sets
 	declbegsys = createset(SYM_CONST, SYM_VAR, SYM_PROCEDURE, SYM_NULL);
-	statbegsys = createset(SYM_BEGIN, SYM_CALL, SYM_IF, SYM_WHILE, SYM_NULL);
+	statbegsys = createset(SYM_BEGIN, SYM_IDENTIFIER,SYM_IF, SYM_WHILE,SYM_RETURN, SYM_NULL);
 	facbegsys = createset(SYM_IDENTIFIER, SYM_NUMBER, SYM_LPAREN, SYM_MINUS, SYM_NEG,SYM_NULL);
 
 	err = cc = cx = ll = 0; // initialize global variables
