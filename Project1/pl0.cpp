@@ -782,14 +782,6 @@ void statement(symset fsys)
 		destroyset(set);
 		cx2 = cx;
 		gen(JPC, 0, 0);
-		if (sym == SYM_DO)
-		{
-			getsym();
-		}
-		else
-		{
-			error(18); // 'do' expected.
-		}
 		statement(fsys);
 		gen(JMP, 0, cx1);
 		code[cx2].a = cx;
