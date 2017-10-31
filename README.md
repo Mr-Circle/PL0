@@ -2,4 +2,4 @@
 The compiler can parse the operator as follows:
   "+","-","*","/","&&","||","^","!","%","&","|","=","==",">",">=","<","<=","<>"
 
-The expression 
+The compiler can also parse the "if(expression)..." , "if(expression)... else..." , "while(expression)..."
