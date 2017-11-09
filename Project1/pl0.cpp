@@ -29,7 +29,7 @@ void error(int n)
   /*getch()函数从源程序获取字符*/
 void getch(void)
 {
-	if (cc == ll)//cc==ll代表当前line中元素并未完全扫描结束，不需要从文件中取下一行字符
+	if (cc == ll)//cc==ll代表当前line中元素扫描结束，需要从文件中取下一行字符
 	{
 		if (feof(infile))
 		{
@@ -166,6 +166,40 @@ void getsym(void)
 		else
 		{
 			sym = SYM_BOR;//|
+		}
+	}
+	else if (ch == '/')
+	{
+		getch();
+		if(ch=='/')//"//"
+		{
+			while (cc != ll)
+			{
+				getch();
+			}
+			getch();
+			getsym();
+		}
+		else if (ch == '*')
+		{
+			while (1)
+			{
+				getch();
+				if (ch == '*')
+				{
+					getch();
+					if (ch == '/')
+					{
+						break;
+					}
+				}
+			}
+			getch();
+			getsym();
+		}
+		else
+		{
+			sym = SYM_SLASH;// '/'
 		}
 	}
 	/*判断字符是否为保存于csym中的无需超前搜索即可判断的运算符*/

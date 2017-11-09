@@ -171,14 +171,15 @@ int wsym[NRW + 1] =
 //与运算符表相对应的记号名
 int ssym[NSYM + 1] =
 {
-	SYM_NULL, SYM_PLUS, SYM_MINUS, SYM_TIMES, SYM_SLASH,
-	SYM_LPAREN, SYM_RPAREN,SYM_LSQUARE,SYM_RSQUARE, SYM_COMMA, SYM_PERIOD, SYM_SEMICOLON,SYM_NEG,SYM_MOD,SYM_BXOR
+	SYM_NULL, SYM_PLUS, SYM_MINUS, SYM_TIMES, 
+	SYM_LPAREN, SYM_RPAREN,SYM_LSQUARE,SYM_RSQUARE, 
+	SYM_COMMA, SYM_PERIOD, SYM_SEMICOLON,SYM_NEG,SYM_MOD,SYM_BXOR
 };
 
 //运算符表
 char csym[NSYM + 1] =
 {
-	' ', '+', '-', '*', '/', '(', ')','[',']', ',', '.', ';','!','%','^'
+	' ', '+', '-', '*', '(', ')','[',']', ',', '.', ';','!','%','^'
 };
 
 #define MAXINS   10
