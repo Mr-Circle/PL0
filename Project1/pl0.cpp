@@ -248,6 +248,11 @@ void enter(int kind)
 		mk = (mask*)&table[tx];
 		mk->level = level;
 		break;
+	case ID_ARRAY://数组
+		mk = (mask*)&table[tx];
+		mk->level = level;
+		mk->address = dx;
+		break;
 	} // switch
 } // enter
 
@@ -295,10 +300,52 @@ void constdeclaration()//const赋值语句
   //////////////////////////////////////////////////////////////////////
 void vardeclaration(void)//变量声明语句
 {
+	mask* mk;
+	int i = 1;
+	int j , k;
 	if (sym == SYM_IDENTIFIER)
 	{
-		enter(ID_VARIABLE);
 		getsym();
+		if(sym==SYM_LSQUARE)//"["
+		{
+			enter(ID_ARRAY);
+			mk = (mask*)&table[tx];
+			while (sym == SYM_LSQUARE)
+			{
+				getsym();
+				if (sym == SYM_NUMBER)
+				{
+					mk->config[i] = num;
+					printf("num is %d\n", num);
+					i++;
+					getsym();
+					if (sym == SYM_RSQUARE)
+					{
+						getsym();
+					}
+					else
+					{
+						error(29);//Missing ']'
+					}
+				}
+				else
+				{
+					error(28);//Illegal array declarations
+				}
+			}
+			mk->config[0] = i - 1;//store the dim of the array
+			mk->config[i] = 1;
+			k = 1;
+			for (j = 1; j <= i-1; j++)
+			{
+				k *= mk->config[j];
+			}
+			dx += k;//allocate the memory for the array
+		}
+		else
+		{
+			enter(ID_VARIABLE);
+		}
 	}
 	else
 	{
@@ -325,7 +372,7 @@ void listcode(int from, int to)
 void factor(symset fsys)
 {
 	void expression(symset fsys);
-	int i;
+	int i,offset=0;
 	int parameter = 0;
 	symset set;
 
@@ -347,10 +394,12 @@ void factor(symset fsys)
 					mask* mk;
 				case ID_CONSTANT:
 					gen(LIT, 0, table[i].value);
+					getsym();
 					break;
 				case ID_VARIABLE:
 					mk = (mask*)&table[i];
 					gen(LOD, level - mk->level, mk->address);
+					getsym();
 					break;
 				case ID_PROCEDURE:
 					mk = (mask*)&table[i];
@@ -360,33 +409,6 @@ void factor(symset fsys)
 						getsym();
 						while (sym == SYM_IDENTIFIER||sym == SYM_NUMBER)
 						{
-							/*if (sym == SYM_IDENTIFIER)
-							{
-								if ((j = position(id)) == 0)
-								{
-									error(11);//Undeclared identifier
-								}
-								else
-								{
-									switch (table[j].kind)
-									{
-									case ID_CONSTANT:
-										gen(LIT, 0, table[j].value);
-										break;
-									case ID_VARIABLE:
-										mk = (mask*)&table[j];
-										gen(LOD, level - mk->level, mk->address);
-										break;
-									case ID_PROCEDURE:
-										error(13);
-										break;
-									}
-								}
-							}
-							else
-							{//sym==SYM_NUMBER
-								gen(LIT, 0, num);
-							}*/
 							set = createset(SYM_COMMA, SYM_RPAREN, SYM_NULL);
 							expression(set);
 							parameter++;
@@ -399,6 +421,7 @@ void factor(symset fsys)
 						{
 							mk = (mask*)&table[i];
 							gen(CAL, level - mk->level, mk->address);
+							getsym();
 						}
 						else
 						{
@@ -414,9 +437,44 @@ void factor(symset fsys)
 						error(21);//"Procedure identifier can not be in an expression without bracket pair."
 					}
 					break;
+				case ID_ARRAY:
+					mk = (mask*)&table[i];
+					i = 0;
+					getsym();
+					gen(LIT, 0, 0);
+					if (sym == SYM_LSQUARE)
+					{
+						set = createset(SYM_RSQUARE, SYM_NULL);
+						while (sym == SYM_LSQUARE)
+						{
+							getsym();
+							expression(set);
+							i++;
+							gen(OPR, 0, OPR_ADD);
+							gen(LIT, 0, mk->config[i + 1]);
+							gen(OPR, 0, OPR_MUL);
+							if (sym == SYM_RSQUARE)
+							{
+								getsym();
+							}
+							else
+							{
+								error(29);
+							}
+						}
+						if (i != mk->config[0])
+						{
+							error(30);//Wrong dims.
+						}
+						gen(LODAR, level-mk->level, mk->address );
+					}
+					else
+					{
+						error(19);//Incorrect symbol.
+					}
+					break;
 				} // switch
 			}
-			getsym();
 		}
 		else if (sym == SYM_NUMBER)
 		{
@@ -641,19 +699,19 @@ void LOGIC_OR(symset fsys)
 //判断表达式
 void expression(symset fsys)
 {
-	int i,sy,poi;
+	int sy,poi,addr;
 	char idn[MAXIDLEN+1];
 	symset set;
 	mask* mk;
 	set = uniteset(fsys, createset(SYM_BECOMES, SYM_NULL));
-	i = cx;
 	sy = sym;
 	strcpy_s(idn, strlen(id) + 1, id);
 	LOGIC_OR(set);
 	if (sy == SYM_IDENTIFIER&&sym==SYM_BECOMES)//=
 	{
-		if ((cx - i) == 1)//':='前仅为一个变量,判断为赋值表达式
+		if (code[cx-1].f==LOD||code[cx-1].f==LODAR)//':='前仅为一个变量,判断为赋值表达式
 		{
+			addr = code[cx - 1].a;
 			cx--;//将LOD指令删除
 			getsym();
 			expression(fsys);//id=expression
@@ -662,15 +720,19 @@ void expression(symset fsys)
 			{
 				error(11);//Undeclared identifier.
 			}
-			else if (table[poi].kind!=ID_VARIABLE)
+			else
 			{
-				error(12);//Illegal assignment.
-				poi = 0;
-			}
-			mk = (mask*)&table[poi];
-			if (poi)
-			{
-				gen(STO, level-mk->level, mk->address);
+				switch (table[poi].kind)
+				{
+				case ID_VARIABLE:
+					mk = (mask*)&table[poi];
+					gen(STO, level - mk->level, mk->address);
+					break;
+				case ID_ARRAY:
+					mk = (mask*)&table[poi];
+					gen(STOAR, level - mk->level, addr);
+					break;
+				}//switch
 			}
 
 		}
@@ -730,7 +792,7 @@ void statement(symset fsys)
 		}
 		cx1 = cx;
 		gen(JPC, 0, 0);
-		set1 = createset(SYM_ELSE, SYM_NULL);
+		set1 = createset(SYM_ELSE, SYM_ELIF, SYM_NULL);
 		set = uniteset(set1, fsys);
 		statement(set);
 		code[cx1].a = cx+1;
@@ -739,6 +801,11 @@ void statement(symset fsys)
 		if (sym == SYM_ELSE)
 		{//else statement
 			getsym();
+			statement(fsys);
+		}
+		else if (sym == SYM_ELIF)
+		{
+			sym = SYM_IF;
 			statement(fsys);
 		}
 		code[cx1].a = cx;
@@ -780,12 +847,96 @@ void statement(symset fsys)
 		expression(set);
 		destroyset(set1);
 		destroyset(set);
+		if (sym == SYM_RPAREN)
+		{
+			getsym();
+		}
+		else
+		{
+			error(22); // ')' expected.
+		}
 		cx2 = cx;
 		gen(JPC, 0, 0);
 		statement(fsys);
 		gen(JMP, 0, cx1);
 		code[cx2].a = cx;
 	}
+	else if (sym == SYM_FOR)
+	{
+		getsym();
+		set = createset(SYM_COMMA, SYM_SEMICOLON,SYM_RPAREN, SYM_NULL);
+		if (sym == SYM_LPAREN)//"("
+		{
+			getsym();
+			expression(set);
+			while(sym==SYM_COMMA)//","
+			{
+				getsym();
+				expression(set);
+			}
+			if (sym == SYM_SEMICOLON)//";"
+			{
+				getsym();
+			}
+			else
+			{
+				error(10);//";" expected
+			}
+			cx1 = cx;//store the cx
+			expression(set);
+			if (sym == SYM_SEMICOLON)
+			{
+				getsym();
+			}
+			else
+			{
+				error(10);//";' expected
+			}
+			cx2 = cx;
+			gen(JPC, 0, 0);
+			gen(JMP, 0, 0);
+			expression(set);
+			destroyset(set);
+			if (sym == SYM_RPAREN)
+			{
+				getsym();
+			}
+			else
+			{
+				error(22);
+			}
+			gen(JMP, 0, cx1);
+			code[cx2 + 1].a = cx;
+			statement(fsys);
+			gen(JMP, 0, cx2 + 2);
+			code[cx2].a = cx;
+		}
+	}
+	/*else if (sym == SYM_SWITCH)
+	{
+		getsym();
+		if (sym == SYM_LPAREN)//"("
+		{
+			getsym();
+		}
+		else
+		{
+			error(22);//"(" excepted
+		}
+		set1 = createset(SYM_RPAREN, SYM_NULL);
+		set = uniteset(set1, fsys);
+		expression(set);
+		destroyset(set1);
+		destroyset(set);
+		if (sym == SYM_RPAREN)
+		{
+			getsym();
+		}
+		else
+		{
+			error(22);
+		}
+	}*/
 	else if (sym == SYM_RETURN)
 	{//return statement
 		getsym();
@@ -1002,9 +1153,9 @@ void interpret()
 			switch (i.a) // operator
 			{
 			case OPR_RET:
-				top = b - 1-i.l;
-				pc = stack[top + 3+i.l];
-				b = stack[top + 2+i.l];
+				top = b - 1 - i.l;
+				pc = stack[top + 3 + i.l];
+				b = stack[top + 2 + i.l];
 				stack[top] = stack[top + i.l];
 				break;
 			case OPR_NEG:
@@ -1099,10 +1250,19 @@ void interpret()
 		case LOD:
 			stack[++top] = stack[base(stack, b, i.l) + i.a];
 			break;
+		case LODAR:
+			stack[top] = stack[base(stack, b, i.l) + i.a + stack[top]];
+			break;
 		case STO:
 			stack[base(stack, b, i.l) + i.a] = stack[top];
 			printf("%d\n", stack[top]);
 			top--;
+			break;
+		case STOAR:
+			stack[base(stack, b, i.l) + i.a + stack[top - 2]] = stack[top];
+			printf("%d\n", stack[top]);
+			stack[top-2] = stack[top ];
+			top -= 2;
 			break;
 		case CAL:
 			stack[top + 2] = base(stack, b, i.l);
@@ -1150,7 +1310,7 @@ void main()
 
 	// create begin symbol sets
 	declbegsys = createset(SYM_CONST, SYM_VAR, SYM_PROCEDURE, SYM_NULL);
-	statbegsys = createset(SYM_BEGIN, SYM_IDENTIFIER,SYM_IF, SYM_WHILE,SYM_RETURN, SYM_NULL);
+	statbegsys = createset(SYM_BEGIN, SYM_IDENTIFIER,SYM_IF, SYM_WHILE,SYM_RETURN, SYM_FOR,SYM_SWITCH ,SYM_NULL);
 	facbegsys = createset(SYM_IDENTIFIER, SYM_NUMBER, SYM_LPAREN, SYM_MINUS, SYM_NEG,SYM_NULL);
 
 	err = cc = cx = ll = 0; // initialize global variables

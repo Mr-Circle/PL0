@@ -1,7 +1,7 @@
 #include <stdio.h>
 //text
 
-#define NRW        13   // number of reserved words
+#define NRW        15   // number of reserved words
 #define TXMAX      500    // length of identifier table
 #define MAXNUMLEN  14     // maximum number of digits in numbers
 #define NSYM       15     // maximum number of symbols in array ssym and csym
@@ -52,6 +52,8 @@ enum symtype
 	SYM_EXIT, 
 	SYM_RETURN, 
 	SYM_FOR,
+	SYM_SWITCH,
+	SYM_CASE,
 	SYM_LSQUARE, 
 	SYM_RSQUARE,
 	SYM_NEG,
@@ -63,13 +65,13 @@ enum symtype
 
 enum idtype
 {
-	ID_CONSTANT, ID_VARIABLE, ID_PROCEDURE
+	ID_CONSTANT, ID_VARIABLE, ID_PROCEDURE, ID_ARRAY
 };
 
 //操作码
 enum opcode
 {
-	LIT, OPR, LOD, STO, CAL, INT, JMP, JPC
+	LIT, OPR, LOD, STO, CAL, INT, JMP, JPC,LODAR,STOAR
 };
 
 //进一步用来选择C语言中的操作
@@ -120,11 +122,11 @@ char* err_msg[] =
 	/* 23 */    "The symbol can not be followed by a factor.",
 	/* 24 */    "The symbol can not be as the beginning of an expression.",
 	/* 25 */    "The number is too great.",
-	/* 26 */    "Illegal procedure declarations",
+	/* 26 */    "Illegal procedure declarations.",
 	/* 27 */    "The number of the parameter of the procedure is wrong.",
-	/* 28 */    "",
-	/* 29 */    "",
-	/* 30 */    "",
+	/* 28 */    "Illegal array declarations.",
+	/* 29 */    "Missing ']'.",
+	/* 30 */    "Wrong dims.",
 	/* 31 */    "",
 	/* 32 */    "There are too many levels."
 };
@@ -151,9 +153,10 @@ instruction code[CXMAX];
 char* word[NRW + 1] =
 {
 	"", /* place holder */
-	"begin", "const", "end","if",
+	"begin", "const", "end", "if",
 	"odd", "procedure",  "var", "while",
-	"else","elif","exit","return","for"
+	"else","elif","exit","return","for",
+	"switch","case"
 };
 
 //与保留字表相对应的记号名
@@ -161,7 +164,8 @@ int wsym[NRW + 1] =
 {
 	SYM_NULL, SYM_BEGIN, SYM_CONST, SYM_END,
 	SYM_IF, SYM_ODD, SYM_PROCEDURE, SYM_VAR, SYM_WHILE,
-	SYM_ELSE, SYM_ELIF, SYM_EXIT, SYM_RETURN, SYM_FOR
+	SYM_ELSE, SYM_ELIF, SYM_EXIT, SYM_RETURN, SYM_FOR,
+	SYM_SWITCH,SYM_CASE
 };
 
 //与运算符表相对应的记号名
@@ -177,11 +181,11 @@ char csym[NSYM + 1] =
 	' ', '+', '-', '*', '/', '(', ')','[',']', ',', '.', ';','!','%','^'
 };
 
-#define MAXINS   8
+#define MAXINS   10
 //‘指令’集
 char* mnemonic[MAXINS] =
 {
-	"LIT", "OPR", "LOD", "STO", "CAL", "INT", "JMP", "JPC"
+	"LIT", "OPR", "LOD", "STO", "CAL", "INT", "JMP", "JPC", "LODAR", "STOAR"
 };
 
 typedef struct
