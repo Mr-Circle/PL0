@@ -282,6 +282,12 @@ void enter(int kind)
 		mk = (mask*)&table[tx];
 		mk->level = level;
 		break;
+	case ID_DEFAULTPRO://内建方法
+		mk = (mask*)&table[tx];
+		mk->level = 0;
+		mk->config[0] = fun_code;
+		mk->config[2] = formal_para;
+		break;
 	case ID_ARRAY://数组
 		mk = (mask*)&table[tx];
 		mk->level = level;
@@ -463,7 +469,43 @@ void factor(symset fsys)
 						}
 						if (parameter != mk->config[0])
 						{
-							error(27);
+							error(27);//"The number of the parameter of the procedure is wrong."
+						}
+					}
+					else
+					{
+						error(21);//"Procedure identifier can not be in an expression without bracket pair."
+					}
+					break;
+				case ID_DEFAULTPRO:
+					mk = (mask*)&table[i];
+					getsym();
+					if (sym == SYM_LPAREN)
+					{
+						getsym();
+						while (sym == SYM_IDENTIFIER || sym == SYM_NUMBER)
+						{
+							set = createset(SYM_COMMA, SYM_RPAREN, SYM_NULL);
+							expression(set);
+							parameter++;
+							if (sym == SYM_COMMA)//','
+							{
+								getsym();
+							}
+						}
+						if (sym == SYM_RPAREN)//')'
+						{
+							mk = (mask*)&table[i];
+							gen(CALL, parameter, mk->config[0]);
+							getsym();
+						}
+						else
+						{
+							error(22);//Missing ')'.
+						}
+						if (parameter != mk->config[2]&&mk->config[1]==1)
+						{
+							error(27);//"The number of the parameter of the procedure is wrong."
 						}
 					}
 					else
@@ -749,7 +791,7 @@ void expression(symset fsys)
 			cx--;//将LOD指令删除
 			getsym();
 			expression(fsys);//id=expression
-			gen(OPR, 0, OPR_BECOMES);
+			//gen(OPR, 0, OPR_BECOMES);
 			if (!(poi = position(idn)))
 			{
 				error(11);//Undeclared identifier.
@@ -781,7 +823,7 @@ void expression(symset fsys)
   //////////////////////////////////////////////////////////////////////
 void statement(symset fsys)
 {
-	int  cx1, cx2;
+	int  cx1, cx2,jmp[10],i,j;
 	symset set1, set;
 
 	if (sym == SYM_IDENTIFIER)
@@ -789,6 +831,7 @@ void statement(symset fsys)
 		set1 = createset(SYM_SEMICOLON, SYM_NULL);
 		set = uniteset(fsys, set1);
 		expression(set);
+		gen(POP, 0, 1);
 		destroyset(set1);
 		destroyset(set);
 		if (sym == SYM_SEMICOLON)
@@ -946,7 +989,7 @@ void statement(symset fsys)
 			code[cx2].a = cx;
 		}
 	}
-	/*else if (sym == SYM_SWITCH)
+	else if (sym == SYM_SWITCH)
 	{
 		getsym();
 		if (sym == SYM_LPAREN)//"("
@@ -970,7 +1013,56 @@ void statement(symset fsys)
 		{
 			error(22);
 		}
-	}*/
+		if (sym == SYM_BEGIN)
+		{
+			getsym();
+		}
+		else
+		{
+			error(18);//"begin" excepted.
+		}
+		i = 0;
+		while (sym == SYM_CASE)
+		{
+			getsym();
+			set = createset(SYM_COLON,SYM_NULL);
+			expression(set);
+			destroyset(set);
+			cx1 = cx;//record the position of the JNE instruction
+			gen(JNE, 0, 0);
+			if (sym == SYM_COLON)
+			{
+				getsym();
+			}
+			else
+			{
+				error(17);
+			}
+			set1= createset(SYM_CASE, SYM_NULL);
+			set = uniteset(set1, fsys);
+			statement(set);
+			destroyset(set1);
+			destroyset(set);
+			jmp[i] = cx;
+			i++;
+			gen(JMP, 0, 0);
+			code[cx1].a = cx;
+		}
+		cx--;//delete the last JMP instruction
+		code[cx1].a = cx;//change the last JNE's address
+		for (j = 0; j < i-1; j++)
+		{
+			code[jmp[j]].a = cx;
+		}
+		if (sym == SYM_END)
+		{
+			getsym();
+		}
+		else
+		{
+			error(16);//"end" excepted.
+		}
+	}
 	else if (sym == SYM_RETURN)
 	{//return statement
 		getsym();
@@ -1289,14 +1381,13 @@ void interpret()
 			break;
 		case STO:
 			stack[base(stack, b, i.l) + i.a] = stack[top];
-			printf("%d\n", stack[top]);
-			top--;
+			//printf("%d\n", stack[top]);
 			break;
 		case STOAR:
-			stack[base(stack, b, i.l) + i.a + stack[top - 2]] = stack[top];
-			printf("%d\n", stack[top]);
-			stack[top-2] = stack[top ];
-			top -= 2;
+			stack[base(stack, b, i.l) + i.a + stack[top - 1]] = stack[top];
+			//printf("%d\n", stack[top]);
+			stack[top-1] = stack[top ];
+			top -= 1;
 			break;
 		case CAL:
 			stack[top + 2] = base(stack, b, i.l);
@@ -1306,14 +1397,40 @@ void interpret()
 			b = top + 2;
 			pc = i.a;
 			break;
+		case CALL:
+			switch (i.a)
+			{
+			case FUN_PRINT:
+				int j;
+				for (j = i.l-1; j >=0; j--)
+				{
+					printf("%d\n", stack[top - j]);
+				}
+				top -= i.l;
+				break;
+			case FUN_RANDOM:
+				stack[++top] = rand();
+				break;
+			//case FUN_CALLSTACK:
+
+			}//switch
+			break;
 		case INT:
 			top += i.a;
+			break;
+		case POP:
+			top -= i.a;
 			break;
 		case JMP:
 			pc = i.a;
 			break;
 		case JPC:
 			if (stack[top] == 0)
+				pc = i.a;
+			top--;
+			break;
+		case JNE:
+			if (stack[top] != stack[top - 1])
 				pc = i.a;
 			top--;
 			break;
@@ -1329,8 +1446,28 @@ void main()
 	FILE* hbin;
 	char s[80];
 	int i;
+	mask* mk;
 	symset set, set1, set2;
 
+	strcpy(id, "print");
+	fun_code = FUN_PRINT;
+	formal_para = 0;
+	enter(ID_DEFAULTPRO);
+	mk = (mask*)&table[tx];
+	mk->config[1] = 0;//表示参数位无效
+	strcpy(id, "random");
+	fun_code = FUN_RANDOM;
+	formal_para = 0;
+	enter(ID_DEFAULTPRO);
+	mk = (mask*)&table[tx];
+	mk->config[1] = 1;//表示参数位有效
+	strcpy(id, "callstack");
+	fun_code = FUN_CALLSTACK;
+	formal_para=0;
+	enter(ID_DEFAULTPRO);
+	mk = (mask*)&table[tx];
+	mk->config[1] = 1;
+	formal_para = 0;
 	printf("Please input source file name: "); // get file name to be compiled
 	scanf_s("%s", s,80);
 	if ((infile = fopen(s, "r")) == NULL)

@@ -4,7 +4,7 @@
 #define NRW        15   // number of reserved words
 #define TXMAX      500    // length of identifier table
 #define MAXNUMLEN  14     // maximum number of digits in numbers
-#define NSYM       15     // maximum number of symbols in array ssym and csym
+#define NSYM       16     // maximum number of symbols in array ssym and csym
 #define MAXIDLEN   10     // length of identifiers
 
 #define MAXADDRESS 32767  // maximum address
@@ -60,18 +60,21 @@ enum symtype
 	SYM_MOD,
 	SYM_BAND,
 	SYM_BOR,
-	SYM_BXOR
+	SYM_BXOR,
+	SYM_COLON
 };
 
 enum idtype
 {
-	ID_CONSTANT, ID_VARIABLE, ID_PROCEDURE, ID_ARRAY
+	ID_CONSTANT, ID_VARIABLE, ID_PROCEDURE, ID_ARRAY,
+	ID_DEFAULTPRO
 };
 
 //操作码
 enum opcode
 {
-	LIT, OPR, LOD, STO, CAL, INT, JMP, JPC,LODAR,STOAR
+	LIT, OPR, LOD, STO, CAL, INT, JMP, JPC, LODAR, STOAR, POP, JNE,
+	CALL
 };
 
 //进一步用来选择C语言中的操作
@@ -85,6 +88,10 @@ enum oprcode
 	OPR_BECOMES
 };
 
+enum funcode
+{
+	FUN_PRINT,FUN_RANDOM,FUN_CALLSTACK
+};
 
 typedef struct
 {
@@ -112,9 +119,9 @@ char* err_msg[] =
 	/* 13 */    "procedure can't be a formal parameter.",
 	/* 14 */    "There must be an identifier to follow the 'call'.",
 	/* 15 */    "A constant or variable can not be called.",
-	/* 16 */    "'then' expected.",
-	/* 17 */    "';' or 'end' expected.",
-	/* 18 */    "'do' expected.",
+	/* 16 */    "'end' expected.",
+	/* 17 */    "';' or 'end'or ':' expected.",
+	/* 18 */    "'begin' expected.",
 	/* 19 */    "Incorrect symbol.",
 	/* 20 */    "Relative operators expected.",
 	/* 21 */    "Procedure identifier can not be in an expression without bracket pair.",
@@ -144,6 +151,7 @@ int  cx;         // index of current instruction to be generated.
 int  level = 0;
 int  tx = 0;//符号表中的条目数
 int  formal_para=0;//当前过程形参数目
+int fun_code;//内建方法号
 
 char line[80];//存储从文件中取出的一整行字符
 
@@ -173,20 +181,21 @@ int ssym[NSYM + 1] =
 {
 	SYM_NULL, SYM_PLUS, SYM_MINUS, SYM_TIMES, 
 	SYM_LPAREN, SYM_RPAREN,SYM_LSQUARE,SYM_RSQUARE, 
-	SYM_COMMA, SYM_PERIOD, SYM_SEMICOLON,SYM_NEG,SYM_MOD,SYM_BXOR
+	SYM_COMMA, SYM_PERIOD, SYM_SEMICOLON,SYM_NEG,SYM_MOD,SYM_BXOR,SYM_COLON
 };
 
 //运算符表
 char csym[NSYM + 1] =
 {
-	' ', '+', '-', '*', '(', ')','[',']', ',', '.', ';','!','%','^'
+	' ', '+', '-', '*', '(', ')','[',']', ',', '.', ';','!','%','^',':'
 };
 
-#define MAXINS   10
+#define MAXINS   13
 //‘指令’集
 char* mnemonic[MAXINS] =
 {
-	"LIT", "OPR", "LOD", "STO", "CAL", "INT", "JMP", "JPC", "LODAR", "STOAR"
+	"LIT", "OPR", "LOD", "STO", "CAL", "INT", "JMP", "JPC", "LODAR", "STOAR", "POP", "JNE",
+	"CALL"
 };
 
 typedef struct
