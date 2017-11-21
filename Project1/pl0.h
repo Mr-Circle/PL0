@@ -9,7 +9,7 @@
 
 #define MAXADDRESS 32767  // maximum address
 #define MAXLEVEL   32     // maximum depth of nesting block
-#define CXMAX      500    // size of code array
+#define CXMAX      1000    // size of code array
 
 #define MAXSYM     30     // maximum number of symbols  
 

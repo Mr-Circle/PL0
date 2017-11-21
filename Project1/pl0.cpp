@@ -216,7 +216,7 @@ void getsym(void)
 		else//若上述要求当前字符均不符合，则可判定为非法字符
 		{
 			printf("Fatal Error: Unknown character.\n");
-			exit(1);
+			//exit(1);
 		}
 	}
 } // getsym
@@ -356,7 +356,6 @@ void vardeclaration(void)//变量声明语句
 				if (sym == SYM_NUMBER)
 				{
 					mk->config[i] = num;
-					printf("num is %d\n", num);
 					i++;
 					getsym();
 					if (sym == SYM_RSQUARE)
@@ -366,6 +365,28 @@ void vardeclaration(void)//变量声明语句
 					else
 					{
 						error(29);//Missing ']'
+					}
+				}
+				else if (sym == SYM_IDENTIFIER)
+				{
+					j = position(id);
+					if (table[j].kind == ID_CONSTANT)
+					{
+						mk->config[i] = table[j].value;
+						i++;
+						getsym();
+						if (sym == SYM_RSQUARE)
+						{
+							getsym();
+						}
+						else
+						{
+							error(29);//Missing ']'
+						}
+					}
+					else
+					{
+						error(28);
 					}
 				}
 				else
@@ -1091,11 +1112,10 @@ void block(symset fsys)
 	int cx0; // initial code index
 	mask* mk, *mk2;
 	int block_dx;
-	int savedTx;
 	int savedformal;
 	symset set1, set;
 
-	dx = 4;
+	dx = 3;
 	block_dx = dx;
 	mk = (mask*)&table[tx - formal];
 	savedformal = formal;
@@ -1167,7 +1187,6 @@ void block(symset fsys)
 				error(4); // There must be an identifier to follow 'const', 'var', or 'procedure'.
 			}
 			level++;
-			savedTx = tx;
 			if (sym == SYM_LPAREN)
 			{
 				int i,j;
@@ -1210,7 +1229,7 @@ void block(symset fsys)
 			block(set);//difine procedure operation
 			destroyset(set1);
 			destroyset(set);
-			tx = savedTx;
+			tx = savetx;
 			level--;
 			/*set1 = createset(SYM_IDENTIFIER, SYM_PROCEDURE, SYM_NULL);
 			set = uniteset(statbegsys, set1);
@@ -1229,7 +1248,7 @@ void block(symset fsys)
 	code[mk->address].a = cx;
 	mk->address = cx;//procedure begin
 	cx0 = cx;
-	gen(INT, 0, block_dx);
+	gen(INT, 0, block_dx-1);
 	formal_para = savedformal;
 	set1 = createset(SYM_SEMICOLON, SYM_END, SYM_NULL);
 	set = uniteset(set1, fsys);
@@ -1265,7 +1284,7 @@ void interpret()
 
 	pc = 0;
 	b = 1;
-	top = 3;
+	top = b;
 	stack[1] = stack[2] = stack[3] = 0;
 	do
 	{
@@ -1393,8 +1412,10 @@ void interpret()
 			stack[top + 2] = base(stack, b, i.l);
 			// generate new block mark
 			stack[top + 3] = b;
+
 			stack[top + 4] = pc;
 			b = top + 2;
+			top=b;
 			pc = i.a;
 			break;
 		case CALL:
