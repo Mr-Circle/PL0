@@ -844,24 +844,100 @@ void expression(symset fsys)
   //////////////////////////////////////////////////////////////////////
 void statement(symset fsys)
 {
-	int  cx1, cx2,jmp[10],i,j;
+	int  cx1, cx2,jmp[10],i,j,savetx;
+	char idn[11];
 	symset set1, set;
+	mask* mk2;
 
 	if (sym == SYM_IDENTIFIER)
 	{ // variable assignment
-		set1 = createset(SYM_SEMICOLON, SYM_NULL);
-		set = uniteset(fsys, set1);
-		expression(set);
-		gen(POP, 0, 1);
-		destroyset(set1);
-		destroyset(set);
-		if (sym == SYM_SEMICOLON)
+		strcpy(idn, id);
+		i = position(id);
+		if (i != 0)
 		{
-			getsym();
+			set1 = createset(SYM_SEMICOLON, SYM_NULL);
+			set = uniteset(fsys, set1);
+			expression(set);
+			gen(POP, 0, 1);
+			destroyset(set1);
+			destroyset(set);
+			if (sym == SYM_SEMICOLON)
+			{
+				getsym();
+			}
+			else
+			{
+				error(10);//";" is expected
+			}
 		}
 		else
 		{
-			error(10);//";" is expected
+			getsym();
+			if (sym == SYM_BECOMES)//"="
+			{
+				getsym();
+				if (sym == SYM_LAMBDA)
+				{
+					cx1 = cx;
+					gen(JMP, 0, 0);
+					strcpy(id, idn);
+					enter(ID_PROCEDURE);
+					getsym();
+					savetx = tx;
+					formal = 0;
+					level++;
+					while (sym == SYM_IDENTIFIER)
+					{
+						formal++;
+						tx++;
+						strcpy(table[tx].name, id);
+						mk2 = (mask*)&table[tx];
+						mk2->level = level;
+						mk2->kind = ID_VARIABLE;
+						getsym();
+						if (sym == SYM_COMMA)//','
+						{
+							getsym();
+						}
+					}
+					if (sym == SYM_COLON)//':'
+					{
+						getsym();
+					}
+					else
+					{
+						error(31);//"Wrong lambda expression."
+					}
+					mk2 = (mask*)&table[savetx];
+					mk2->config[0] = formal;
+					j = formal + 1;
+					for (i = savetx + 1; i <= tx; i++)
+					{
+						mk2 = (mask*)&table[i];
+						mk2->address = -j;
+						j--;
+					}
+					formal_para = formal;
+					mk2 = (mask*)&table[savetx];
+					mk2->address = cx;
+					gen(INT, 0, 3);
+					set = uniteset(statbegsys, fsys);
+					statement(set);
+					destroyset(set);
+					formal_para = 0;
+					code[cx1].a = cx;
+					tx = savetx;
+					level--;
+				}
+				else
+				{
+					error(11);
+				}
+			}
+			else
+			{
+				error(11);
+			}
 		}
 	}
 	else if (sym == SYM_IF)

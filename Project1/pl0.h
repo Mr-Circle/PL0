@@ -1,7 +1,7 @@
 #include <stdio.h>
 //text
 
-#define NRW        15   // number of reserved words
+#define NRW        16   // number of reserved words
 #define TXMAX      500    // length of identifier table
 #define MAXNUMLEN  14     // maximum number of digits in numbers
 #define NSYM       16     // maximum number of symbols in array ssym and csym
@@ -61,7 +61,8 @@ enum symtype
 	SYM_BAND,
 	SYM_BOR,
 	SYM_BXOR,
-	SYM_COLON
+	SYM_COLON,
+	SYM_LAMBDA
 };
 
 enum idtype
@@ -134,7 +135,7 @@ char* err_msg[] =
 	/* 28 */    "Illegal array declarations.",
 	/* 29 */    "Missing ']'.",
 	/* 30 */    "Wrong dims.",
-	/* 31 */    "",
+	/* 31 */    "Wrong lambda expression.",
 	/* 32 */    "There are too many levels."
 };
 
@@ -164,7 +165,7 @@ char* word[NRW + 1] =
 	"begin", "const", "end", "if",
 	"odd", "procedure",  "var", "while",
 	"else","elif","exit","return","for",
-	"switch","case"
+	"switch","case","lambda"
 };
 
 //与保留字表相对应的记号名
@@ -173,7 +174,7 @@ int wsym[NRW + 1] =
 	SYM_NULL, SYM_BEGIN, SYM_CONST, SYM_END,
 	SYM_IF, SYM_ODD, SYM_PROCEDURE, SYM_VAR, SYM_WHILE,
 	SYM_ELSE, SYM_ELIF, SYM_EXIT, SYM_RETURN, SYM_FOR,
-	SYM_SWITCH,SYM_CASE
+	SYM_SWITCH,SYM_CASE,SYM_LAMBDA
 };
 
 //与运算符表相对应的记号名
