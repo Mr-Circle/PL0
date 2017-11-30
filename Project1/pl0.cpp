@@ -29,7 +29,7 @@ void error(int n)
   /*getch()函数从源程序获取字符*/
 void getch(void)
 {
-	if (cc == ll)//cc==ll代表当前line中元素扫描结束，需要从文件中取下一行字符
+	if (cc == ll)
 	{
 		if (feof(infile))
 		{
@@ -38,17 +38,16 @@ void getch(void)
 		}
 		ll = cc = 0;
 		printf("%5d  ", cx);
-		/*利用while循环将文件中一行字符直接取出至line */
 		while ((!feof(infile)) // added & modified by alex 01-02-09
 			&& ((ch = getc(infile)) != '\n'))
 		{
 			printf("%c", ch);
-			line[++ll] = ch;//ll始终为当前读取字母的数量，从line【1】处开始有字母
+			line[++ll] = ch;
 		} // while
 		printf("\n");
-		line[++ll] = ' ';//在取出字符串结尾处添加空格，方便getsym()中在一行字符处理结束后调用get()获取下一行字符串
+		line[++ll] = ' ';
 	}
-	ch = line[++cc];//先将文件中整行字符串读出至line中，再用ch从line中单个取字母
+	ch = line[++cc];
 } // getch
 
   //////////////////////////////////////////////////////////////////////
@@ -73,11 +72,11 @@ void getsym(void)
 			getch();
 		} while (isalpha(ch) || isdigit(ch));
 		a[k] = 0;
-		strcpy(id, a);//将获取的字符串复制到字符数组id中
-		word[0] = id;//将id赋值给word中保留位作为哨兵位，方便比较
+		strcpy(id, a);
+		word[0] = id;
 		i = NRW;
-		while (strcmp(id, word[i--]));//与保留字表中的保留字进行比较，判断字符串是否为保留字
-		if (++i)//id与word中原有的保留字匹配上
+		while (strcmp(id, word[i--]));
+		if (++i)
 			sym = wsym[i]; // symbol is a reserved word
 		else
 			sym = SYM_IDENTIFIER;   // symbol is an identifier
@@ -87,17 +86,15 @@ void getsym(void)
 	{ // symbol is a number.
 		k = num = 0;
 		sym = SYM_NUMBER;
-		/*利用字符串形式的数字求出真实数值存储在num中*/
 		do
 		{
 			num = num * 10 + ch - '0';
 			k++;//k记录数字的位数
 			getch();
 		} while (isdigit(ch));
-		if (k > MAXNUMLEN)//若数字位数超过定义过的最大位数
+		if (k > MAXNUMLEN)
 			error(25);     // The number is too great.
 	}
-	/*下面一系列流程均为判断字符是否为运算符，并且按照是否需要超前搜索分为两类*/
 	else if (ch == '=')
 	{
 		getch();
@@ -206,9 +203,9 @@ void getsym(void)
 	else
 	{ // other tokens
 		i = NSYM;
-		csym[0] = ch;//将当前字符赋值给csym数组中的保留位csym[0]作为哨兵位
-		while (csym[i--] != ch);//循环判断当前字符是否在csym出现
-		if (++i)//若当前字符与csym中原本保存的运算符匹配上
+		csym[0] = ch;
+		while (csym[i--] != ch);
+		if (++i)
 		{
 			sym = ssym[i];
 			getch();
@@ -295,6 +292,37 @@ void enter(int kind)
 		break;
 	} // switch
 } // enter
+
+  //////////////////////////////////////////////////////////////////////
+void DEFAULTPRO()
+{
+	mask* mk;
+	strcpy(id, "print");
+	fun_code = FUN_PRINT;
+	formal_para = 0;
+	enter(ID_DEFAULTPRO);
+	mk = (mask*)&table[tx];
+	mk->config[1] = 0;//表示参数位无效
+	strcpy(id, "random");
+	fun_code = FUN_RANDOM;
+	formal_para = 0;
+	enter(ID_DEFAULTPRO);
+	mk = (mask*)&table[tx];
+	mk->config[1] = 1;//表示参数位有效
+	strcpy(id, "callstack");
+	fun_code = FUN_CALLSTACK;
+	formal_para = 0;
+	enter(ID_DEFAULTPRO);
+	mk = (mask*)&table[tx];
+	mk->config[1] = 1;
+	strcpy(id, "input");
+	fun_code = FUN_INPUT;
+	formal_para = 0;
+	enter(ID_DEFAULTPRO);
+	mk = (mask*)&table[tx];
+	mk->config[1] = 0;//表示参数位无效
+	formal_para = 0;
+}
 
   //////////////////////////////////////////////////////////////////////
   // locates identifier in symbol table.
@@ -428,6 +456,48 @@ void listcode(int from, int to)
 	printf("\n");
 } // listcode
 
+int true_list[20], false_list[20];
+int true_index = 0;
+int false_index = 0;
+   //////////////////////////////////////////////////////////////////////
+//短路运算代码优化
+void reversal(int i)
+{
+	switch (code[i].f)
+	{
+	case JG:
+		code[i].f = JBE;
+		break;
+	case JB:
+		code[i].f = JGE;
+		break;
+	case JGE:
+		code[i].f = JB;
+		break;
+	case JBE:
+		code[i].f = JG;
+		break;
+	}
+}
+
+void code_adjust()
+{
+	int i;
+	if (true_list[true_index - 1] == cx - 1)
+	{
+		true_list[--true_index] = 0;
+		cx--;
+	}
+	else if (true_list[true_index - 1] == cx - 2)
+	{
+		reversal(cx - 2);
+		true_list[--true_index] = 0;
+		false_list[false_index - 1] = cx - 2;
+		cx--;
+	}
+}
+
+
   //////////////////////////////////////////////////////////////////////
 //项的判定
 void factor(symset fsys)
@@ -436,6 +506,8 @@ void factor(symset fsys)
 	int i,offset=0;
 	int parameter = 0;
 	symset set;
+	mask* mk2;
+	int temp[20];
 
 	test(facbegsys, fsys, 24); // The symbol can not be as the beginning of an expression.
 
@@ -503,20 +575,46 @@ void factor(symset fsys)
 					getsym();
 					if (sym == SYM_LPAREN)
 					{
-						getsym();
-						while (sym == SYM_IDENTIFIER || sym == SYM_NUMBER)
+						if (strcmp("input", mk->name) != 0)
 						{
-							set = createset(SYM_COMMA, SYM_RPAREN, SYM_NULL);
-							expression(set);
-							parameter++;
-							if (sym == SYM_COMMA)//','
+							getsym();
+							while (sym == SYM_IDENTIFIER || sym == SYM_NUMBER)
 							{
-								getsym();
+								set = createset(SYM_COMMA, SYM_RPAREN, SYM_NULL);
+								expression(set);
+								parameter++;
+								if (sym == SYM_COMMA)//','
+								{
+									getsym();
+								}
 							}
+						}
+						else
+						{
+							getsym();
+							while (sym == SYM_IDENTIFIER || sym == SYM_NUMBER)
+							{
+								if (sym == SYM_NUMBER)
+								{
+									error(33);
+								}
+								i = position(id);
+								if (table[i].kind == ID_CONSTANT)
+								{
+									error(33);
+								}
+								mk2 = (mask*)&table[i];
+								gen(LEA, level - mk2->level, mk2->address);
+								parameter++;
+								getsym();
+								if (sym == SYM_COMMA)//','
+								{
+									getsym();
+								}
+							}//while
 						}
 						if (sym == SYM_RPAREN)//')'
 						{
-							mk = (mask*)&table[i];
 							gen(CALL, parameter, mk->config[0]);
 							getsym();
 						}
@@ -524,7 +622,7 @@ void factor(symset fsys)
 						{
 							error(22);//Missing ')'.
 						}
-						if (parameter != mk->config[2]&&mk->config[1]==1)
+						if (parameter != mk->config[2] && mk->config[1] == 1)
 						{
 							error(27);//"The number of the parameter of the procedure is wrong."
 						}
@@ -608,7 +706,33 @@ void factor(symset fsys)
 		{
 			getsym();
 			expression(fsys);
-			gen(OPR, 0, OPR_NEGL);
+			if (true_index == 0 && false_index == 0)
+			{
+				true_list[true_index++] = cx;
+				gen(JPC, 0, 0);
+				false_list[false_index++] = cx;
+				gen(JMP, 0, 0);
+			}
+			else
+			{
+				for (i = 0; i < true_index; i++)
+				{
+					temp[i] = true_list[i];
+					true_list[i] = 0;
+				}
+				for (i = 0; i < false_index; i++)
+				{
+					true_list[i] = false_list[i];
+					false_list[i] = 0;
+				}
+				for (i = 0; i < true_index; i++)
+				{
+					false_list[i] = temp[i];
+				}
+				i = true_index;
+				true_index = false_index;
+				false_index = i;
+			}
 		}
 		test(fsys, createset(SYM_LPAREN, SYM_NULL), 23);
 	} // while
@@ -619,15 +743,52 @@ void factor(symset fsys)
 void term(symset fsys)
 {
 	int mulop;
+	int i;
 	symset set;
 
 	set = uniteset(fsys, createset(SYM_TIMES, SYM_SLASH, SYM_MOD,SYM_NULL));//（'*','/','%')
 	factor(set);
+	if ((true_index != 0 || false_index != 0)&&(sym == SYM_TIMES || sym == SYM_SLASH || sym == SYM_MOD))
+	{
+		code_adjust();
+		gen(LIT, 0, 1);
+		gen(JMP, 0, cx + 2);
+		gen(LIT, 0, 0);
+		for (i = 0; i < true_index; i++)
+		{
+			code[true_list[i]].a = cx - 3;
+			true_list[i] = 0;
+		}
+		for (i = 0; i < false_index; i++)
+		{
+			code[false_list[i]].a = cx - 1;
+			false_list[i] = 0;
+		}
+		true_index = false_index = 0;
+	}
 	while (sym == SYM_TIMES || sym == SYM_SLASH||sym==SYM_MOD)
 	{
 		mulop = sym;
 		getsym();
 		factor(set);
+		if (true_index != 0 || false_index != 0)
+		{
+			code_adjust();
+			gen(LIT, 0, 1);
+			gen(JMP, 0, cx + 2);
+			gen(LIT, 0, 0);
+			for (i = 0; i < true_index; i++)
+			{
+				code[true_list[i]].a = cx - 3;
+				true_list[i] = 0;
+			}
+			for (i = 0; i < false_index; i++)
+			{
+				code[false_list[i]].a = cx - 1;
+				false_list[i] = 0;
+			}
+			true_index = false_index = 0;
+		}
 		if (mulop == SYM_TIMES)
 		{
 			gen(OPR, 0, OPR_MUL);
@@ -649,16 +810,51 @@ void term(symset fsys)
 void ADD_exp(symset fsys)
 {
 	int addop;
+	int i;
 	symset set;
-
 	set = uniteset(fsys, createset(SYM_PLUS, SYM_MINUS, SYM_NULL));//'+','-'
-
 	term(set);
+	if ((true_index != 0 || false_index != 0)&&(sym == SYM_PLUS || sym == SYM_MINUS))
+	{
+		code_adjust();
+		gen(LIT, 0, 1);
+		gen(JMP, 0, cx + 2);
+		gen(LIT, 0, 0);
+		for (i = 0; i < true_index; i++)
+		{
+			code[true_list[i]].a = cx - 3;
+			true_list[i] = 0;
+		}
+		for (i = 0; i < false_index; i++)
+		{
+			code[false_list[i]].a = cx - 1;
+			false_list[i] = 0;
+		}
+		true_index = false_index = 0;
+	}
 	while (sym == SYM_PLUS || sym == SYM_MINUS)
 	{
 		addop = sym;
 		getsym();
 		term(set);
+		if (true_index != 0 || false_index != 0)
+		{
+			code_adjust();
+			gen(LIT, 0, 1);
+			gen(JMP, 0, cx + 2);
+			gen(LIT, 0, 0);
+			for (i = 0; i < true_index; i++)
+			{
+				code[true_list[i]].a = cx - 3;
+				true_list[i] = 0;
+			}
+			for (i = 0; i < false_index; i++)
+			{
+				code[false_list[i]].a = cx - 1;
+				false_list[i] = 0;
+			}
+			true_index = false_index = 0;
+		}
 		if (addop == SYM_PLUS)
 		{
 			gen(OPR, 0, OPR_ADD);
@@ -677,8 +873,9 @@ void ADD_exp(symset fsys)
 void condition(symset fsys)
 {
 	int relop;
+	int i;
 	symset set;
-	set = uniteset(fsys, createset(SYM_EQU, SYM_NEQ, SYM_LES, SYM_GEQ, SYM_GTR, SYM_LEQ));//'=','<>','>','<','<=','>='
+	set = uniteset(fsys, createset(SYM_EQU, SYM_NEQ, SYM_LES, SYM_GEQ, SYM_GTR, SYM_LEQ));//'==','<>','>','<','<=','>='
 	if (sym == SYM_ODD)
 	{
 		getsym();
@@ -690,28 +887,82 @@ void condition(symset fsys)
 		ADD_exp(set);
 		if (inset(sym, relset))
 		{
+			if (true_index != 0 || false_index != 0)
+			{
+				code_adjust();
+				gen(LIT, 0, 1);
+				gen(JMP, 0, cx + 2);
+				gen(LIT, 0, 0);
+				for (i = 0; i < true_index; i++)
+				{
+					code[true_list[i]].a = cx - 3;
+					true_list[i] = 0;
+				}
+				for (i = 0; i < false_index; i++)
+				{
+					code[false_list[i]].a = cx - 1;
+					false_list[i] = 0;
+				}
+				true_index = false_index = 0;
+			}
 			relop = sym;
 			getsym();
 			ADD_exp(fsys);
+			if (true_index != 0 || false_index != 0)
+			{
+				code_adjust();
+				gen(LIT, 0, 1);
+				gen(JMP, 0, cx + 2);
+				gen(LIT, 0, 0);
+				for (i = 0; i < true_index; i++)
+				{
+					code[true_list[i]].a = cx - 3;
+					true_list[i] = 0;
+				}
+				for (i = 0; i < false_index; i++)
+				{
+					code[false_list[i]].a = cx - 1;
+					false_list[i] = 0;
+				}
+				true_index = false_index = 0;
+			}
 			switch (relop)
 			{
 			case SYM_EQU:
-				gen(OPR, 0, OPR_EQU);
+				gen(JNE, 0, 0);
+				false_list[false_index++] = cx - 1;
+				gen(JMP, 0, 0);
+				true_list[true_index++] = cx - 1;
 				break;
 			case SYM_NEQ:
-				gen(OPR, 0, OPR_NEQ);
-				break;
-			case SYM_LES:
-				gen(OPR, 0, OPR_LES);
-				break;
-			case SYM_GEQ:
-				gen(OPR, 0, OPR_GEQ);
+				gen(JNE, 0, 0);
+				true_list[true_index++] = cx - 1;
+				gen(JMP, 0, 0);
+				false_list[false_index++] = cx - 1;
 				break;
 			case SYM_GTR:
-				gen(OPR, 0, OPR_GTR);
+				gen(JG, 0, 0);
+				true_list[true_index++] = cx - 1;
+				gen(JMP, 0, 0);
+				false_list[false_index++] = cx - 1;
+				break;
+			case SYM_LES:
+				gen(JB, 0, 0);
+				true_list[true_index++] = cx - 1;
+				gen(JMP, 0, 0);
+				false_list[false_index++] = cx - 1;
 				break;
 			case SYM_LEQ:
-				gen(OPR, 0, OPR_LEQ);
+				gen(JG, 0, 0);
+				false_list[false_index++] = cx - 1;
+				gen(JMP, 0, 0);
+				true_list[true_index++] = cx - 1;
+				break;
+			case SYM_GEQ:
+				gen(JB, 0, 0);
+				false_list[false_index++] = cx - 1;
+				gen(JMP, 0, 0);
+				true_list[true_index++] = cx - 1;
 				break;
 			} // switch
 		} // if
@@ -722,12 +973,49 @@ void condition(symset fsys)
 void BIT_AND(symset fsys)
 {
 	symset set;
+	int i;
 	set = uniteset(fsys, createset(SYM_BAND, SYM_NULL));
 	condition(set);
+	if ((true_index != 0 || false_index != 0)&&(sym == SYM_BAND))
+	{
+		code_adjust();
+		gen(LIT, 0, 1);
+		gen(JMP, 0, cx + 2);
+		gen(LIT, 0, 0);
+		for (i = 0; i < true_index; i++)
+		{
+			code[true_list[i]].a = cx - 3;
+			true_list[i] = 0;
+		}
+		for (i = 0; i < false_index; i++)
+		{
+			code[false_list[i]].a = cx - 1;
+			false_list[i] = 0;
+		}
+		true_index = false_index = 0;
+	}
 	while (sym == SYM_BAND)
 	{
 		getsym();
 		condition(set);
+		if (true_index != 0 || false_index != 0)
+		{
+			code_adjust();
+			gen(LIT, 0, 1);
+			gen(JMP, 0, cx + 2);
+			gen(LIT, 0, 0);
+			for (i = 0; i < true_index; i++)
+			{
+				code[true_list[i]].a = cx - 3;
+				true_list[i] = 0;
+			}
+			for (i = 0; i < false_index; i++)
+			{
+				code[false_list[i]].a = cx - 1;
+				false_list[i] = 0;
+			}
+			true_index = false_index = 0;
+		}
 		gen(OPR, 0, OPR_BAND);
 	}//while
 	destroyset(set);
@@ -737,12 +1025,49 @@ void BIT_AND(symset fsys)
 void BIT_XOR(symset fsys)
 {
 	symset set;
+	int i;
 	set = uniteset(fsys, createset(SYM_BXOR, SYM_NULL));
 	BIT_AND(set);
+	if ((true_index != 0 || false_index != 0)&&(sym==SYM_BXOR))
+	{
+		code_adjust();
+		gen(LIT, 0, 1);
+		gen(JMP, 0, cx + 2);
+		gen(LIT, 0, 0);
+		for (i = 0; i < true_index; i++)
+		{
+			code[true_list[i]].a = cx - 3;
+			true_list[i] = 0;
+		}
+		for (i = 0; i < false_index; i++)
+		{
+			code[false_list[i]].a = cx - 1;
+			false_list[i] = 0;
+		}
+		true_index = false_index = 0;
+	}
 	while (sym == SYM_BXOR)
 	{
 		getsym();
 		BIT_AND(set);
+		if (true_index != 0 || false_index != 0)
+		{
+			code_adjust();
+			gen(LIT, 0, 1);
+			gen(JMP, 0, cx + 2);
+			gen(LIT, 0, 0);
+			for (i = 0; i < true_index; i++)
+			{
+				code[true_list[i]].a = cx - 3;
+				true_list[i] = 0;
+			}
+			for (i = 0; i < false_index; i++)
+			{
+				code[false_list[i]].a = cx - 1;
+				false_list[i] = 0;
+			}
+			true_index = false_index = 0;
+		}
 		gen(OPR, 0, OPR_BXOR);
 	}
 	destroyset(set);
@@ -752,13 +1077,50 @@ void BIT_XOR(symset fsys)
 void BIT_OR(symset fsys)
 {
 	symset set;
+	int i;
 	set = uniteset(fsys, createset(SYM_BOR, SYM_NULL));
 	BIT_XOR(set);
+	if ((true_index != 0 || false_index != 0)&&(sym == SYM_BOR))
+	{
+		code_adjust();
+		gen(LIT, 0, 1);
+		gen(JMP, 0, cx + 2);
+		gen(LIT, 0, 0);
+		for (i = 0; i < true_index; i++)
+		{
+			code[true_list[i]].a = cx - 3;
+			true_list[i] = 0;
+		}
+		for (i = 0; i < false_index; i++)
+		{
+			code[false_list[i]].a = cx - 1;
+			false_list[i] = 0;
+		}
+		true_index = false_index = 0;
+	}
 	while (sym == SYM_BOR)
 	{
 		getsym();
 		BIT_XOR(set);
-		gen(OPR, 0, OPR_OR);
+		if (true_index != 0 || false_index != 0)
+		{
+			code_adjust();
+			gen(LIT, 0, 1);
+			gen(JMP, 0, cx + 2);
+			gen(LIT, 0, 0);
+			for (i = 0; i < true_index; i++)
+			{
+				code[true_list[i]].a = cx - 3;
+				true_list[i] = 0;
+			}
+			for (i = 0; i < false_index; i++)
+			{
+				code[false_list[i]].a = cx - 1;
+				false_list[i] = 0;
+			}
+			true_index = false_index = 0;
+		}
+		gen(OPR, 0, OPR_BOR);
 	}
 	destroyset(set);
 }
@@ -767,14 +1129,56 @@ void BIT_OR(symset fsys)
 void LOGIC_AND(symset fsys)
 {
 	symset set;
+	int temp[20],i,t=0;
 	set = uniteset(fsys, createset(SYM_AND, SYM_NULL));
 	BIT_OR(set);
+	if ((true_index == 0 && false_index == 0)&&sym==SYM_AND)
+	{
+		gen(JPC, 0, 0);
+		false_list[false_index++] = cx - 1;
+		gen(JMP, 0, 0);
+		true_list[true_index++] = cx - 1;
+	}
 	while (sym==SYM_AND)
 	{
 		getsym();
+		code_adjust();
+		for (i = 0; i < true_index; i++)
+		{
+			code[true_list[i]].a = cx;
+			true_list[i] = 0;
+		}
+		true_index = 0;
+		for (i = t; (i - t) < false_index; i++)
+		{
+			temp[i] = false_list[i-t];
+			false_list[i] = 0;
+		}
+		false_index = 0;
+		t = i;
 		BIT_OR(set);
-		gen(OPR, 0, OPR_AND);
+		if (true_index == 0 && false_index == 0)
+		{
+			gen(JPC, 0, 0);
+			false_list[false_index++] = cx - 1;
+			gen(JMP, 0, 0);
+			true_list[true_index++] = cx - 1;
+		}
 	}//while
+	if (t != 0)
+	{
+		for (i = t; (i - t) < false_index; i++)
+		{
+			temp[i] = false_list[i-t];
+			false_list[i] = 0;
+		}
+		t = i;
+		for (i = 0; i < t; i++)
+		{
+			false_list[i] = temp[i];
+		}
+		false_index = t;
+	}
 	destroyset(set);
 }
 
@@ -782,28 +1186,171 @@ void LOGIC_AND(symset fsys)
 void LOGIC_OR(symset fsys)
 {
 	symset set;
+	int temp[20], i, t = 0;
 	set = uniteset(fsys, createset(SYM_OR, SYM_NULL));
 	LOGIC_AND(set);
+	if ((true_index == 0 && false_index == 0) && sym == SYM_OR)
+	{
+		gen(JPC, 0, 0);
+		false_list[false_index++] = cx - 1;
+		gen(JMP, 0, 0);
+		true_list[true_index++] = cx - 1;
+	}
 	while (sym == SYM_OR)//||
 	{
 		getsym();
+		if (false_list[false_index - 1] == cx - 1)
+		{
+			false_list[--false_index] = 0;
+			cx--;
+		}
+		else if (false_list[false_index - 1] == cx - 2)
+		{
+			reversal(cx - 2);
+			false_list[--false_index] = 0;
+			true_list[true_index - 1] = cx - 2;
+			cx--;
+		}
+		for (i = 0; i < false_index; i++)
+		{
+			code[false_list[i]].a = cx;
+			false_list[i] = 0;
+		}
+		false_index = 0;
+		for (i = t; (i - t) < true_index; i++)
+		{
+			temp[i] = true_list[i-t];
+			true_list[i] = 0;
+		}
+		true_index = 0;
+		t = i;
 		LOGIC_AND(set);
-		gen(OPR, 0, OPR_OR);
+		if (true_index == 0 && false_index == 0)
+		{
+			gen(JPC, 0, 0);
+			false_list[false_index++] = cx - 1;
+			gen(JMP, 0, 0);
+			true_list[true_index++] = cx - 1;
+		}
 	}//while
+	if (t != 0)
+	{
+		for (i = t; (i - t) < true_index; i++)
+		{
+			temp[i] = true_list[i - t];
+			true_list[i] = 0;
+		}
+		t = i;
+		for (i = 0; i < t; i++)
+		{
+			true_list[i] = temp[i];
+		}
+		true_index = t;
+	}
 	destroyset(set);
+}
+
+void thr_expression(symset fsys)
+{
+	symset set;
+	int temp[20], i, false_int,cx1;
+	set = uniteset(fsys, createset(SYM_QMARK, SYM_NULL));
+	LOGIC_OR(set);
+	destroyset(set);
+	if (sym == SYM_QMARK)
+	{
+		if (true_index == 0 && false_index == 0)
+		{
+			gen(JPC, 0, 0);
+			false_list[false_index++] = cx - 1;
+			gen(JMP, 0, 0);
+			true_list[true_index++] = cx - 1;
+		}
+		code_adjust();
+		for (i = 0; i < false_index; i++)
+		{
+			temp[i] = false_list[i];
+			false_list[i] = 0;
+		}
+		false_int = false_index;
+		false_index = 0;
+		for (i = 0; i < true_index; i++)
+		{
+			code[true_list[i]].a = cx;
+			true_list[i] = 0;
+		}
+		true_index = 0;
+		getsym();
+		set = createset(SYM_COLON, SYM_NULL);
+		LOGIC_OR(set);
+		destroyset(set);
+		if (true_index != 0 || false_index != 0)
+		{
+			code_adjust();
+			gen(LIT, 0, 1);
+			gen(JMP, 0, cx + 2);
+			gen(LIT, 0, 0);
+			for (i = 0; i < true_index; i++)
+			{
+				code[true_list[i]].a = cx - 3;
+				true_list[i] = 0;
+			}
+			for (i = 0; i < false_index; i++)
+			{
+				code[false_list[i]].a = cx - 1;
+				false_list[i] = 0;
+			}
+			true_index = false_index = 0;
+		}
+		cx1 = cx;
+		gen(JMP, 0, 0);
+		for (i = 0; i < false_int; i++)
+		{
+			code[temp[i]].a = cx;
+		}
+		if (sym == SYM_COLON)
+		{
+			getsym();
+		}
+		else
+		{
+			error(17);
+		}
+		LOGIC_OR(fsys);
+		if (true_index != 0 || false_index != 0)
+		{
+			code_adjust();
+			gen(LIT, 0, 1);
+			gen(JMP, 0, cx + 2);
+			gen(LIT, 0, 0);
+			for (i = 0; i < true_index; i++)
+			{
+				code[true_list[i]].a = cx - 3;
+				true_list[i] = 0;
+			}
+			for (i = 0; i < false_index; i++)
+			{
+				code[false_list[i]].a = cx - 1;
+				false_list[i] = 0;
+			}
+			true_index = false_index = 0;
+		}
+		code[cx1].a = cx;
+	}//if
 }
 
 //判断表达式
 void expression(symset fsys)
 {
 	int sy,poi,addr;
+	int i;
 	char idn[MAXIDLEN+1];
 	symset set;
 	mask* mk;
 	set = uniteset(fsys, createset(SYM_BECOMES, SYM_NULL));
 	sy = sym;
 	strcpy_s(idn, strlen(id) + 1, id);
-	LOGIC_OR(set);
+	thr_expression(set);
 	if (sy == SYM_IDENTIFIER&&sym==SYM_BECOMES)//=
 	{
 		if (code[cx-1].f==LOD||code[cx-1].f==LODAR)//':='前仅为一个变量,判断为赋值表达式
@@ -812,6 +1359,24 @@ void expression(symset fsys)
 			cx--;//将LOD指令删除
 			getsym();
 			expression(fsys);//id=expression
+			if (true_index != 0 || false_index != 0)
+			{
+				code_adjust();
+				gen(LIT, 0, 1);
+				gen(JMP, 0, cx + 2);
+				gen(LIT, 0, 0);
+				for (i = 0; i < true_index; i++)
+				{
+					code[true_list[i]].a = cx - 3;
+					true_list[i] = 0;
+				}
+				for (i = 0; i < false_index; i++)
+				{
+					code[false_list[i]].a = cx - 1;
+					false_list[i] = 0;
+				}
+				true_index = false_index = 0;
+			}
 			//gen(OPR, 0, OPR_BECOMES);
 			if (!(poi = position(idn)))
 			{
@@ -845,6 +1410,8 @@ void expression(symset fsys)
 void statement(symset fsys)
 {
 	int  cx1, cx2,jmp[10],i,j,savetx;
+	int temp[20];
+	int false_int;
 	char idn[11];
 	symset set1, set;
 	mask* mk2;
@@ -858,6 +1425,24 @@ void statement(symset fsys)
 			set1 = createset(SYM_SEMICOLON, SYM_NULL);
 			set = uniteset(fsys, set1);
 			expression(set);
+			if (true_index != 0 || false_index != 0)
+			{
+				code_adjust();
+				gen(LIT, 0, 1);
+				gen(JMP, 0, cx + 2);
+				gen(LIT, 0, 0);
+				for (i = 0; i < true_index; i++)
+				{
+					code[true_list[i]].a = cx - 3;
+					true_list[i] = 0;
+				}
+				for (i = 0; i < false_index; i++)
+				{
+					code[false_list[i]].a = cx - 1;
+					false_list[i] = 0;
+				}
+				true_index = false_index = 0;
+			}
 			gen(POP, 0, 1);
 			destroyset(set1);
 			destroyset(set);
@@ -964,14 +1549,37 @@ void statement(symset fsys)
 		{
 			error(22); // ')' expected.
 		}
-		cx1 = cx;
-		gen(JPC, 0, 0);
+		code_adjust();
+		if(false_index==0)
+		{
+			temp[0] = cx;
+			gen(JPC, 0, 0);
+			false_int = 1;
+		}
+		else
+		{
+			for (false_int = 0; false_int < false_index; false_int++)
+			{
+				temp[false_int] = false_list[false_int];
+				false_list[false_int] = 0;
+			}
+			false_index = 0;
+		}
+		for (i = 0; i < true_index; i++)
+		{
+			code[true_list[i]].a = cx;
+			true_list[i] = 0;
+		}
+		true_index = 0;
 		set1 = createset(SYM_ELSE, SYM_ELIF, SYM_NULL);
 		set = uniteset(set1, fsys);
 		statement(set);
-		code[cx1].a = cx+1;
 		cx1 = cx;//save the position of JMP in the instrutions
 		gen(JMP, 0, 0);
+		for (i = 0; i < false_int; i++)
+		{
+			code[temp[i]].a = cx;
+		}
 		if (sym == SYM_ELSE)
 		{//else statement
 			getsym();
@@ -1021,6 +1629,28 @@ void statement(symset fsys)
 		expression(set);
 		destroyset(set1);
 		destroyset(set);
+		code_adjust();
+		if (false_index == 0)
+		{
+			temp[0] = cx;
+			gen(JPC, 0, 0);
+			false_int = 1;
+		}
+		else
+		{
+			for (false_int = 0; false_int < false_index; false_int++)
+			{
+				temp[false_int] = false_list[false_int];
+				false_list[false_int] = 0;
+			}
+			false_index = 0;
+		}
+		for (i = 0; i < true_index; i++)
+		{
+			code[true_list[i]].a = cx;
+			true_list[i] = 0;
+		}
+		true_index = 0;
 		if (sym == SYM_RPAREN)
 		{
 			getsym();
@@ -1029,24 +1659,29 @@ void statement(symset fsys)
 		{
 			error(22); // ')' expected.
 		}
-		cx2 = cx;
-		gen(JPC, 0, 0);
 		statement(fsys);
 		gen(JMP, 0, cx1);
-		code[cx2].a = cx;
+		for (i = 0; i < false_int; i++)
+		{
+			code[temp[i]].a = cx;
+		} 
 	}
 	else if (sym == SYM_FOR)
 	{
+		instruction tem_code[20];
 		getsym();
 		set = createset(SYM_COMMA, SYM_SEMICOLON,SYM_RPAREN, SYM_NULL);
 		if (sym == SYM_LPAREN)//"("
 		{
 			getsym();
-			expression(set);
-			while(sym==SYM_COMMA)//","
+			if (sym == SYM_IDENTIFIER)
 			{
-				getsym();
 				expression(set);
+				while (sym == SYM_COMMA)//","
+				{
+					getsym();
+					expression(set);
+				}//init_expression
 			}
 			if (sym == SYM_SEMICOLON)//";"
 			{
@@ -1058,6 +1693,28 @@ void statement(symset fsys)
 			}
 			cx1 = cx;//store the cx
 			expression(set);
+			code_adjust();
+			if (false_index == 0)
+		{
+			temp[0] = cx;
+			gen(JPC, 0, 0);
+			false_int = 1;
+		}
+		else
+		{
+			for (false_int = 0; false_int < false_index; false_int++)
+			{
+				temp[false_int] = false_list[false_int];
+				false_list[false_int] = 0;
+			}
+			false_index = 0;
+		}
+		for (i = 0; i < true_index; i++)
+		{
+			code[true_list[i]].a = cx;
+			true_list[i] = 0;
+		}
+		true_index = 0;
 			if (sym == SYM_SEMICOLON)
 			{
 				getsym();
@@ -1066,9 +1723,33 @@ void statement(symset fsys)
 			{
 				error(10);//";' expected
 			}
-			cx2 = cx;
-			gen(JPC, 0, 0);
-			gen(JMP, 0, 0);
+			cx2 = cx-1;
+			expression(set);
+			if (sym == SYM_RPAREN)
+			{
+				getsym();
+			}
+			else
+			{
+				error(22);
+			}
+			i = cx - cx2;
+			for (j = 1; j < i; j++)
+			{
+				tem_code[j] = code[cx2 + j];
+			}//store the code of the expression
+			cx = cx2 + 1;
+			statement(fsys);
+			for (j = 1; j < i; j++)
+			{
+				code[cx++] = tem_code[j];
+			}
+			gen(JMP, 0, cx1);
+			for (i = 0; i < false_int; i++)
+			{
+				code[temp[i]].a = cx;
+			}
+			/*gen(JMP, 0, 0);
 			expression(set);
 			destroyset(set);
 			if (sym == SYM_RPAREN)
@@ -1083,7 +1764,7 @@ void statement(symset fsys)
 			code[cx2 + 1].a = cx;
 			statement(fsys);
 			gen(JMP, 0, cx2 + 2);
-			code[cx2].a = cx;
+			code[cx2].a = cx;*/
 		}
 	}
 	else if (sym == SYM_SWITCH)
@@ -1123,7 +1804,17 @@ void statement(symset fsys)
 		{
 			getsym();
 			set = createset(SYM_COLON,SYM_NULL);
+			cx1 = cx;
 			expression(set);
+			cx2 = cx;
+			for (j = cx1; j < cx2; j++)
+			{
+				if (code[j].f == LOD || code[j].f == LODAR)
+				{
+					error(14);
+					break;
+				}
+			}
 			destroyset(set);
 			cx1 = cx;//record the position of the JNE instruction
 			gen(JNE, 0, 0);
@@ -1170,6 +1861,19 @@ void statement(symset fsys)
 		destroyset(set);
 		gen(STO, 0, -1);
 		gen(OPR, formal_para, OPR_RET);
+		if (sym == SYM_SEMICOLON)
+		{
+			getsym();
+		}
+		else
+		{
+			error(10);//";" is excepted
+		}
+	}
+	else if (sym == SYM_EXIT)
+	{//exit statement
+		gen(EXT, 0, 0);
+		getsym();
 		if (sym == SYM_SEMICOLON)
 		{
 			getsym();
@@ -1417,39 +2121,6 @@ void interpret()
 			case OPR_ODD:
 				stack[top] %= 2;
 				break;
-			case OPR_EQU:
-				top--;
-				stack[top] = stack[top] == stack[top + 1];
-				break;
-			case OPR_NEQ:
-				top--;
-				stack[top] = stack[top] != stack[top + 1];
-			case OPR_LES:
-				top--;
-				stack[top] = stack[top] < stack[top + 1];
-				break;
-			case OPR_GEQ:
-				top--;
-				stack[top] = stack[top] >= stack[top + 1];
-			case OPR_GTR:
-				top--;
-				stack[top] = stack[top] > stack[top + 1];
-				break;
-			case OPR_LEQ:
-				top--;
-				stack[top] = stack[top] <= stack[top + 1];
-				break;
-			case OPR_AND:
-				top--;
-				stack[top] = stack[top] && stack[top + 1];
-				break;
-			case OPR_OR:
-				top--;
-				stack[top] = stack[top] || stack[top + 1];
-				break;
-			case OPR_NEGL:
-				stack[top] = !stack[top];
-				break;
 			case OPR_BAND:
 				top--;
 				stack[top] &= stack[top + 1];
@@ -1467,6 +2138,9 @@ void interpret()
 				stack[top] = stack[top - 1];
 				break;
 			} // switch
+			break;
+		case LEA:
+			stack[++top] = base(stack, b, i.l) + i.a;
 			break;
 		case LOD:
 			stack[++top] = stack[base(stack, b, i.l) + i.a];
@@ -1488,7 +2162,6 @@ void interpret()
 			stack[top + 2] = base(stack, b, i.l);
 			// generate new block mark
 			stack[top + 3] = b;
-
 			stack[top + 4] = pc;
 			b = top + 2;
 			top=b;
@@ -1508,7 +2181,16 @@ void interpret()
 			case FUN_RANDOM:
 				stack[++top] = rand();
 				break;
+			case FUN_INPUT:
+				printf("Enter the number:");
+				for (j = i.l - 1; j >= 0; j--)
+				{
+					scanf_s("%d", &stack[stack[top - j]], 1);
+				}
+				top -= i.l;
+				break;
 			//case FUN_CALLSTACK:
+
 
 			}//switch
 			break;
@@ -1531,6 +2213,30 @@ void interpret()
 				pc = i.a;
 			top--;
 			break;
+		case JG:
+			if (stack[top - 1] > stack[top])
+				pc = i.a;
+			top -= 2;
+			break;
+		case JGE:
+			if (stack[top - 1] >= stack[top])
+				pc = i.a;
+			top -= 2;
+			break;
+		case JB:
+			if (stack[top - 1] < stack[top])
+				pc = i.a;
+			top -= 2;
+			break;
+		case JBE:
+			if (stack[top - 1] <= stack[top])
+				pc = i.a;
+			top -= 2;
+			break;
+		case EXT:
+			printf("EXIT THE PROGRAM!\n");
+			pc = 0;
+			break;
 		} // switch
 	} while (pc);
 
@@ -1543,28 +2249,13 @@ void main()
 	FILE* hbin;
 	char s[80];
 	int i;
-	mask* mk;
 	symset set, set1, set2;
 
-	strcpy(id, "print");
-	fun_code = FUN_PRINT;
-	formal_para = 0;
-	enter(ID_DEFAULTPRO);
-	mk = (mask*)&table[tx];
-	mk->config[1] = 0;//表示参数位无效
-	strcpy(id, "random");
-	fun_code = FUN_RANDOM;
-	formal_para = 0;
-	enter(ID_DEFAULTPRO);
-	mk = (mask*)&table[tx];
-	mk->config[1] = 1;//表示参数位有效
-	strcpy(id, "callstack");
-	fun_code = FUN_CALLSTACK;
-	formal_para=0;
-	enter(ID_DEFAULTPRO);
-	mk = (mask*)&table[tx];
-	mk->config[1] = 1;
-	formal_para = 0;
+	DEFAULTPRO();
+	for (i = 0; i < 20; i++)
+	{
+		true_list[i] = false_list[i] = 0;
+	}
 	printf("Please input source file name: "); // get file name to be compiled
 	scanf_s("%s", s,80);
 	if ((infile = fopen(s, "r")) == NULL)

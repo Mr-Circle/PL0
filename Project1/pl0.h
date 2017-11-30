@@ -4,7 +4,7 @@
 #define NRW        16   // number of reserved words
 #define TXMAX      500    // length of identifier table
 #define MAXNUMLEN  14     // maximum number of digits in numbers
-#define NSYM       16     // maximum number of symbols in array ssym and csym
+#define NSYM       17     // maximum number of symbols in array ssym and csym
 #define MAXIDLEN   10     // length of identifiers
 
 #define MAXADDRESS 32767  // maximum address
@@ -62,6 +62,7 @@ enum symtype
 	SYM_BOR,
 	SYM_BXOR,
 	SYM_COLON,
+	SYM_QMARK,
 	SYM_LAMBDA
 };
 
@@ -75,23 +76,20 @@ enum idtype
 enum opcode
 {
 	LIT, OPR, LOD, STO, CAL, INT, JMP, JPC, LODAR, STOAR, POP, JNE,
-	CALL
+	CALL,LEA, EXT, JG,  JB,  JGE, JBE
 };
 
 //进一步用来选择C语言中的操作
 enum oprcode
 {
 	OPR_RET, OPR_NEG, OPR_ADD, OPR_MIN,
-	OPR_MUL, OPR_DIV, OPR_ODD, OPR_EQU,
-	OPR_NEQ, OPR_LES, OPR_LEQ, OPR_GTR,
-	OPR_GEQ, OPR_AND, OPR_OR,  OPR_NEGL,
-	OPR_MOD, OPR_BAND,OPR_BOR, OPR_BXOR,
-	OPR_BECOMES
+	OPR_MUL, OPR_DIV, OPR_ODD, OPR_MOD, 
+	OPR_BAND,OPR_BOR, OPR_BXOR, OPR_BECOMES
 };
 
 enum funcode
 {
-	FUN_PRINT,FUN_RANDOM,FUN_CALLSTACK
+	FUN_PRINT,FUN_RANDOM,FUN_CALLSTACK,FUN_INPUT
 };
 
 typedef struct
@@ -118,7 +116,7 @@ char* err_msg[] =
 	/* 11 */    "Undeclared identifier.",
 	/* 12 */    "Illegal assignment.",
 	/* 13 */    "procedure can't be a formal parameter.",
-	/* 14 */    "There must be an identifier to follow the 'call'.",
+	/* 14 */    "Must be the constant expression.",
 	/* 15 */    "A constant or variable can not be called.",
 	/* 16 */    "'end' expected.",
 	/* 17 */    "';' or 'end'or ':' expected.",
@@ -182,21 +180,22 @@ int ssym[NSYM + 1] =
 {
 	SYM_NULL, SYM_PLUS, SYM_MINUS, SYM_TIMES, 
 	SYM_LPAREN, SYM_RPAREN,SYM_LSQUARE,SYM_RSQUARE, 
-	SYM_COMMA, SYM_PERIOD, SYM_SEMICOLON,SYM_NEG,SYM_MOD,SYM_BXOR,SYM_COLON
+	SYM_COMMA, SYM_PERIOD, SYM_SEMICOLON,SYM_NEG,SYM_MOD,
+	SYM_BXOR, SYM_COLON, SYM_QMARK
 };
 
 //运算符表
 char csym[NSYM + 1] =
 {
-	' ', '+', '-', '*', '(', ')','[',']', ',', '.', ';','!','%','^',':'
+	' ', '+', '-', '*', '(', ')','[',']', ',', '.', ';','!','%','^',':',"?"
 };
 
-#define MAXINS   13
+#define MAXINS   19
 //‘指令’集
 char* mnemonic[MAXINS] =
 {
 	"LIT", "OPR", "LOD", "STO", "CAL", "INT", "JMP", "JPC", "LODAR", "STOAR", "POP", "JNE",
-	"CALL"
+	"CALL","LEA", "EXT", "JG",  "JB",  "JGE", "JBE"
 };
 
 typedef struct
